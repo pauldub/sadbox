@@ -6,8 +6,17 @@ package parse
 
 import (
 	"fmt"
+	"strings"
 	"unicode"
 	"unicode/utf8"
+)
+
+const (
+	sDecDigits  = "0123456789"
+	sHexDigits  = sDecDigits + "ABCDEF"
+	sAlphaLower = "abcdefghijklmnopqrstuvwxyz"
+	sAlphaUpper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	sAlphaNum   = sAlphaLower + sAlphaUpper + sDecDigits
 )
 
 var tags = map[string]tokenType{
@@ -25,22 +34,27 @@ var tags = map[string]tokenType{
 var symbols = map[string]tokenType{
 	"(":  tokenLeftParen,
 	")":  tokenRightParen,
-	"*":  tokenMul,
-	"/":  tokenDiv,
-	"%":  tokenMod,
-	"+":  tokenAdd,
-	"-":  tokenSub,
+	"*":  tokenStar,
+	"*=": tokenStarEq,
+	"/":  tokenSlash,
+	"/=": tokenSlashEq,
+	"%":  tokenPercent,
+	"%=": tokenPercentEq,
+	"+":  tokenPlus,
+	"+=": tokenPlusEq,
+	"-":  tokenMinus,
+	"-=": tokenMinusEq,
 	"?":  tokenQuestion,
-	"=":  tokenAssign,
-	"==": tokenEq,
+	"=":  tokenEq,
+	"==": tokenEqEq,
 	":":  tokenColon,
-	":=": tokenColonAssign,
+	":=": tokenColonEq,
 	"!":  tokenNot,
 	"!=": tokenNotEq,
 	">":  tokenGt,
-	">=": tokenGte,
+	">=": tokenGtEq,
 	"<":  tokenLt,
-	"<=": tokenLte,
+	"<=": tokenLtEq,
 	"&&": tokenAnd,
 	"||": tokenOr,
 }
@@ -55,8 +69,11 @@ func lexFile(l *lexer) stateFn {
 	for {
 		switch l.nextRune() {
 		case '/':
-			return lexComment
+			if !l.define {
+				return lexComment
+			}
 		case '{':
+			emitText(l, 1)
 			return lexTagStart
 		case eof:
 			emitText(l, 1)
@@ -113,9 +130,7 @@ func lexComment(l *lexer) stateFn {
 //
 // A left curly brace was already consumed when this is called.
 func lexTagStart(l *lexer) stateFn {
-	emitText(l, 1)
-	l.emitValue(tokenLeftBrace, l.pos-2, "")
-	l.skip()
+	l.emitValue(tokenLeftBrace, l.pos-1, "")
 	return lexTagContent
 }
 
@@ -123,7 +138,17 @@ func lexTagStart(l *lexer) stateFn {
 //
 // A right curly brace was already consumed when this is called.
 func lexTagEnd(l *lexer) stateFn {
-	l.emitValue(tokenRightBrace, l.pos-2, "")
+	l.emitValue(tokenRightBrace, l.pos-1, "")
+	return lexFile
+}
+
+// lexTagComment scans a comment tag: {/* comment */}.
+func lexTagComment(l *lexer) stateFn {
+	i := strings.Index(l.input[l.pos:], "*/}")
+	if i < 0 {
+		return errorf(l, "unclosed comment tag")
+	}
+	l.pos += i + 3
 	l.skip()
 	return lexFile
 }
@@ -143,22 +168,32 @@ func lexTagContent(l *lexer) stateFn {
 	case '.':
 		return lexIdentifier
 	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		// We only support decimal numbers starting with a digit.
-		// No floats starting with dot.
+		// We only support decimal/hexadecimal numbers starting with a digit.
+		// No floats starting with dot. No unary operators included.
 		l.backup()
 		return lexNumber
 	case ' ', '\t', '\r':
 		l.acceptMany(" \t\r")
 		l.skip()
-	case '(', ')', '*', '/', '%', '+', '-', '?':
+	case '(', ')', '?':
 		l.emitValue(symbols[l.input[l.pin:l.pos]], l.pin, "")
-	case '=', ':', '!', '<', '>':
+	case '/':
+		// A possible comment.
+		if l.accept('*') {
+			return lexTagComment
+		}
+		fallthrough
+	case '*', '%', '+', '-', '=', ':', '!', '<', '>':
+		// *, *=
+		// /, /=
+		// %, %=
+		// +, +=
+		// -, -=
 		// =, ==
 		// :, :=
 		// !, !=
 		// <, <=
 		// >, >=
-		// TODO: *=, /=, %=, +=, -=
 		l.accept('=')
 		l.emitValue(symbols[l.input[l.pin:l.pos]], l.pin, "")
 	case '&', '|':
@@ -180,8 +215,30 @@ func lexTagContent(l *lexer) stateFn {
 	return lexTagContent
 }
 
+// lexIdentifier scans an alphanumeric or field.
 func lexIdentifier(l *lexer) stateFn {
-	return nil
+Loop:
+	for {
+		switch r := l.nextRune(); {
+		case isAlphaNumeric(r):
+			// absorb.
+		case r == '.' && l.input[l.pin] == '.':
+			// field chaining; absorb into one token.
+		default:
+			l.backup()
+			word := l.input[l.pin:l.pos]
+			switch {
+			case word[0] == '.':
+				l.emit(tokenVar)
+			case word == "true", word == "false":
+				l.emit(tokenBool)
+			default:
+				l.emit(tokenIdent)
+			}
+			break Loop
+		}
+	}
+	return lexTagContent
 }
 
 // lexQuote scans a quoted string.
@@ -204,12 +261,86 @@ Loop:
 	return lexTagContent
 }
 
+// lexNumber scans a number: a float, decimal integer or hex integer.
 func lexNumber(l *lexer) stateFn {
-	return nil
+	typ, ok := scanNumber(l)
+	if !ok {
+		return errorf(l, "bad number syntax: %q", l.input[l.pin:l.pos])
+	}
+	// Emits tokenFloat or tokenInt.
+	l.emit(typ)
+	return lexTagContent
 }
 
 func lexIndex(l *lexer) stateFn {
 	return errorf(l, "indexes are not supported yet")
+}
+
+// scanNumber scans a number.
+//
+// It returns a tokenFloat or tokenInt) and a flag indicating if an error
+// was found.
+//
+// Floats must be in decimal and must either:
+//
+//     - Have digits both before and after the decimal point (both can be
+//       a single 0), e.g. 0.5, 100.0, or
+//     - Have a lower-case e that represents scientific notation,
+//       e.g. 3e-3, 6.02e23.
+//
+// Integers can be:
+//
+//     - decimal (e.g. 827)
+//     - hexadecimal (must begin with 0x and must use capital A-F,
+//       e.g. 0x1A2B).
+//
+// Unary operator minus is not scanned here.
+func scanNumber(l *lexer) (t tokenType, ok bool) {
+	t = tokenInt
+	if l.acceptPrefix("0x") {
+		// Hexadecimal.
+		if l.acceptMany(sHexDigits) == "" {
+			// Requires at least one digit.
+			return
+		}
+		if l.accept('.') {
+			// No dots for hexadecimals.
+			return
+		}
+	} else {
+		// Decimal.
+		if l.acceptMany(sDecDigits) == "" {
+			// Requires at least one digit.
+			return
+		}
+		if l.accept('.') {
+			// Float.
+			if l.acceptMany(sDecDigits) == "" {
+				// Requires a digit after the dot.
+				return
+			}
+			t = tokenFloat
+		} else {
+			// Integer.
+			if l.input[l.pin] == '0' {
+				// Integers can't start with 0.
+				return
+			}
+		}
+		if l.accept('e') {
+			l.acceptOne("+-")
+			if l.acceptMany(sDecDigits) == "" {
+				// A digit is required after the scientific notation.
+				return
+			}
+			t = tokenFloat
+		}
+	}
+	// Next thing must not be alphanumeric.
+	if l.acceptMany(sAlphaNum) != "" {
+		return
+	}
+	return t, true
 }
 
 // helpers --------------------------------------------------------------------

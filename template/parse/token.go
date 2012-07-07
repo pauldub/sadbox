@@ -22,8 +22,8 @@ func (i tokenType) String() string {
 const (
 	tokenError tokenType = iota
 	tokenEOF
-	tokenIdent        // [a-zA-Z_][a-zA-Z0-9_]+(\.[a-zA-Z_][a-zA-Z0-9_]+)*
-	tokenDot          // identifier starting with dot
+	tokenIdent        // alphanumeric
+	tokenVar          // identifier starting with dot
 	tokenComment
 	tokenText
 	tokenRawText
@@ -45,22 +45,29 @@ const (
 	tokenWith
 	// Operators
 	tokenNeg          // - (unary)
-	tokenNot          // ! ("not" in Closure Template)
-	tokenMul          // *
-	tokenDiv          // /
-	tokenMod          // %
-	tokenAdd          // +
-	tokenSub          // - (binary)
-	tokenEq           // ==
+	tokenNot          // ! ("not")
 	tokenNotEq        // !=
+	tokenStar         // *
+	tokenStarEq       // *=
+	tokenSlash        // /
+	tokenSlashEq      // /=
+	tokenPercent      // %
+	tokenPercentEq    // %=
+	tokenPlus         // +
+	tokenPlusEq       // +=
+	tokenMinus        // -
+	tokenMinusEq      // -=
+	tokenEq           // =
+	tokenEqEq         // ==
 	tokenGt           // >
-	tokenGte          // >=
+	tokenGtEq         // >=
 	tokenLt           // <
-	tokenLte          // <=
+	tokenLtEq         // <=
 	tokenOr           // || ("or" in Closure Template)
 	tokenAnd          // && ("and" in Closure Template)
 	tokenQuestion     // ?
 	tokenColon        // : ("else" or key:value delimiter in maps)
+	tokenColonEq      // :=
 	// Symbols
 	tokenDollar       // $
 	tokenLeftParen    // (
@@ -69,16 +76,13 @@ const (
 	tokenRightBrace   // }
 	tokenLeftBracket  // [
 	tokenRightBracket // ]
-
-	tokenAssign
-	tokenColonAssign
 )
 
 var tokenName = map[tokenType]string{
 	tokenError:        "error",
 	tokenEOF:          "EOF",
-	tokenDot:          "dot",
 	tokenIdent:        "ident",
+	tokenVar:          "dot",
 	tokenComment:      "comment",
 	tokenText:         "text",
 	tokenRawText:      "raw text",
@@ -101,21 +105,28 @@ var tokenName = map[tokenType]string{
 	// Operators
 	tokenNeg:          "-",
 	tokenNot:          "!",
-	tokenMul:          "*",
-	tokenDiv:          "/",
-	tokenMod:          "%",
-	tokenAdd:          "+",
-	tokenSub:          "-",
-	tokenEq:           "==",
 	tokenNotEq:        "!=",
+	tokenStar:         "*",
+	tokenStarEq:       "*=",
+	tokenSlash:        "/",
+	tokenSlashEq:      "/=",
+	tokenPercent:      "%",
+	tokenPercentEq:    "%=",
+	tokenPlus:         "+",
+	tokenPlusEq:       "+=",
+	tokenMinus:        "-",
+	tokenMinusEq:      "-=",
+	tokenEq:           "=",
+	tokenEqEq:         "==",
 	tokenGt:           ">",
-	tokenGte:          ">=",
+	tokenGtEq:         ">=",
 	tokenLt:           "<",
-	tokenLte:          "<=",
+	tokenLtEq:         "<=",
 	tokenOr:           "||",
 	tokenAnd:          "&&",
 	tokenQuestion:     "?",
 	tokenColon:        ":",
+	tokenColonEq:      ":=",
 	// Symbols
 	tokenDollar:       "$",
 	tokenLeftParen:    "(",
@@ -125,8 +136,8 @@ var tokenName = map[tokenType]string{
 	tokenLeftBracket:  "[",
 	tokenRightBracket: "]",
 
-	tokenAssign:       "=",
-	tokenColonAssign:  ":=",
+
+
 }
 
 // ----------------------------------------------------------------------------

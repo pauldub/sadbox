@@ -28,23 +28,19 @@ func newLexer(input string) *lexer {
 
 // lexer scans an input and emits tokens.
 type lexer struct {
-	input string  // input being scanned
-	pin   int     // pinned position in the input
-	pos   int     // current position in the input
-	width int     // width of last rune read from input
-	state stateFn // the next lexing function to enter
-	queue *queue  // queue of emitted tokens
+	input  string  // input being scanned
+	pin    int     // pinned position in the input
+	pos    int     // current position in the input
+	width  int     // width of last rune read from input
+	state  stateFn // the next lexing function to enter
+	queue  *queue  // queue of emitted tokens
+	define bool    // flag set when parsing between {define}{end}
 }
 
 // emit -----------------------------------------------------------------------
 
 func (l *lexer) emit(typ tokenType) {
-	l.queue.push(token{
-		typ: typ,
-		pos: l.position(l.pin),
-		val: l.input[l.pin:l.pos],
-	})
-	l.pin = l.pos
+	l.emitValue(typ, l.pin, l.input[l.pin:l.pos])
 }
 
 func (l *lexer) emitValue(typ tokenType, pos int, value string) {
