@@ -1,0 +1,183 @@
+Templates
+=========
+Templates consist of files with one or more `{template}{end}` pairs.
+The contents between a `{template}` tag and its `{end}` counterpart
+define the template. The template tag must include a name for the
+template; it must be a unique name, used to execute the template.
+Here's is a file with one template:
+
+    {template Hello}
+      Hello, World!
+    {end}
+
+Templates with names starting with a upper case letter are public,
+and those starting with a lower case letter are private. More about
+this later.
+
+Calling other templates
+=======================
+Templates can be mixed together calling each other by their names.
+For this we use the `{call}` tag . Now here are two templates defined
+in the same file, with the first caling the second:
+
+    {template Hello}
+      Hello, {call World}!
+    {end}
+
+    {template World}
+      World
+    {end}
+
+Packages
+========
+Templates can belong to a package. The `{package}` tag defines
+the "namespace" for the templates that follow it:
+
+    {package examples}
+
+    {template Hello}
+      Hello, World!
+    {end}
+
+To execute our Hello template, now we need to call "examples.Hello":
+the package name becomes part of the template name. If no package is
+defined, the "global" package is used, and the template is simply
+called by its name, "Hello".
+
+When a template calls another template from the same package, the
+namespace can be ommitted following a simple rule: when the template
+name doesn't contain a dot, the current namespace is implicitly
+prepended to it.
+
+Private templates (those with names starting with a lower case
+letter) can only be called by templates from the same package,
+and can't be executed directly. Public templates don't have these
+restrictions. Visibility rules allow templates to have helper
+templates that are not intended for general use, and also permits
+some optimizations like inlining private templates depending on the
+compilation target.
+
+Comments
+========
+Anything outside of a `{template}` tag isn't included in the output.
+We can use this void to document the template and the variables
+it uses, using souble slashes to indicate a comment line:
+
+    // Hello displays a hello message. It takes no variables.
+    {template Hello}
+      Hello, World!
+    {end}
+
+Besides direct execution, templates can be compiled to JavaScript
+or Go, and the comment lines immediatelly preceding a `{template}`
+tag are added to the generated code.
+
+To include comments in a `{template}` tag context, a special tag
+is used:
+
+    {template Hello}
+      {# This is a comment and won't appear in the output #}
+      Hello, World!
+    {end}
+
+{if}{else}{end}
+===============
+TODO
+
+{with}{else}{end}
+=================
+TODO
+
+{range}{else}{end}
+==================
+TODO
+
+Composition
+===========
+We can achieve something that is called "template inheritance" in
+other template engines using composition. It turns out that templates
+can be nested, like this:
+
+    {template Hello}
+      {template message}
+        Hello, world!
+      {end}
+    {end}
+
+Nested templates are like variables: their names are added to the
+context-variables table (the dot). For this reason, their names must
+start with lower case.
+
+The trick is that, like other variables defined inside the template,
+we can pass nested templates to a different template. Imagine we
+have a template like this:
+
+    {template Base}
+      <p>A header</p>
+      {call .body}
+      <p>A footer</p>
+    {end}
+
+We can compose a template that fills the `.body` part of the "Base"
+template:
+
+    {template Page}
+      {template body}
+        <p>A body</p>
+      {end}
+      {call Base .}
+    {end}
+
+"Base" is executed passing the dot, which includes the `.body`
+variable, which is our body template filler.
+
+{raw}{end}
+==========
+If there are parts of the template that should not be parsed, use
+the tag `{raw}`:
+
+    {template Hello}
+      <p>This is how a function looks like:</p>
+      {raw}
+        <pre>
+          func foo() string {
+              return "foo"
+          }
+        </pre>
+      {end}
+    {end}
+
+`{raw}` accepts a string that identifies where to stop consuming the
+raw text. By default it is "{end}", like tag ends, but this can be
+changed:
+
+    {template Hello}
+      <p>This is how a template looks like:</p>
+      {raw "--stop--"}
+        {template Hello}
+          Hello, World!
+        {end}
+      --stop--
+    {end}
+
+When `{raw}` appears any template tag is ignored until the stop word
+is found (normally `{end}`).
+
+Summary
+=======
+- A template can contain these top level tags:
+  - {package}
+  - {template}{end}
+- Between a {template} and its {end} tag, some more tags can be used:
+  - {template}{end}
+  - {call}
+  - {if}{else}{end}
+  - {with}{else}{end}
+  - {range}{else}{end}
+  - {raw}{end}
+  - {lb}, {rb}, {sp}
+  - {##}
+  - tags with variables, expressions and function calls.
+- Outside of a {template} tag, everything is ignored, except lines
+  starting with double-slashes immediately preceding the template
+  tag: those are used do document compiled templates.

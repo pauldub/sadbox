@@ -11,12 +11,17 @@ import (
 	"unicode/utf8"
 )
 
+// TODO
+// - track "inside template" state
+// - only emit single line comments preceding a template tag
+
 const (
 	sDecDigits  = "0123456789"
 	sHexDigits  = sDecDigits + "ABCDEF"
 	sAlphaLower = "abcdefghijklmnopqrstuvwxyz"
 	sAlphaUpper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	sAlphaNum   = sAlphaLower + sAlphaUpper + sDecDigits
+	sWhitespace = " \t\n\r"
 )
 
 var tags = map[string]tokenType{
@@ -118,10 +123,6 @@ func lexComment(l *lexer) stateFn {
 			l.acceptUntilRune('\n')
 			l.emit(tokenComment)
 		}
-	case '*':
-		emitText(l, 2)
-		l.acceptUntilPrefix("*/")
-		l.emit(tokenComment)
 	}
 	return lexFile
 }
@@ -142,13 +143,13 @@ func lexTagEnd(l *lexer) stateFn {
 	return lexFile
 }
 
-// lexTagComment scans a comment tag: {/* comment */}.
+// lexTagComment scans a comment tag: {# comment #}.
 func lexTagComment(l *lexer) stateFn {
-	i := strings.Index(l.input[l.pos:], "*/}")
+	i := strings.Index(l.input[l.pos:], "#}")
 	if i < 0 {
 		return errorf(l, "unclosed comment tag")
 	}
-	l.pos += i + 3
+	l.pos += i + 2
 	l.skip()
 	return lexFile
 }
@@ -167,23 +168,14 @@ func lexTagContent(l *lexer) stateFn {
 		return lexQuote
 	case '.':
 		return lexIdentifier
-	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-		// We only support decimal/hexadecimal numbers starting with a digit.
-		// No floats starting with dot. No unary operators included.
-		l.backup()
-		return lexNumber
 	case ' ', '\t', '\r':
 		l.acceptMany(" \t\r")
 		l.skip()
 	case '(', ')', '?':
 		l.emitValue(symbols[l.input[l.pin:l.pos]], l.pin, "")
-	case '/':
-		// A possible comment.
-		if l.accept('*') {
-			return lexTagComment
-		}
-		fallthrough
-	case '*', '%', '+', '-', '=', ':', '!', '<', '>':
+	case '#':
+		return lexTagComment
+	case '*', '/', '%', '+', '-', '=', ':', '!', '<', '>':
 		// *, *=
 		// /, /=
 		// %, %=
@@ -204,8 +196,14 @@ func lexTagContent(l *lexer) stateFn {
 		}
 		l.emitValue(symbols[l.input[l.pin:l.pos]], l.pin, "")
 	case eof, '\n':
-		return errorf(l, "unclosed action")
+		return errorf(l, "unclosed tag")
 	default:
+		if isDigit(r) {
+			// We only support decimal/hexadecimal numbers starting with a digit.
+			// No floats starting with dot. No unary operators included.
+			l.backup()
+			return lexNumber
+		}
 		if isAlphaNumeric(r) {
 			l.backup()
 			return lexIdentifier
@@ -232,6 +230,8 @@ Loop:
 				l.emit(tokenVar)
 			case word == "true", word == "false":
 				l.emit(tokenBool)
+			case word == "raw":
+				return lexRaw
 			default:
 				l.emit(tokenIdent)
 			}
@@ -243,22 +243,11 @@ Loop:
 
 // lexQuote scans a quoted string.
 func lexQuote(l *lexer) stateFn {
-Loop:
-	for {
-		switch l.nextRune() {
-		case '\\':
-			if r := l.nextRune(); r != eof && r != '\n' {
-				break
-			}
-			fallthrough
-		case eof, '\n':
-			return errorf(l, "unterminated quoted string")
-		case '"':
-			break Loop
-		}
+	if scanQuote(l) {
+		l.emit(tokenString)
+		return lexTagContent
 	}
-	l.emit(tokenString)
-	return lexTagContent
+	return errorf(l, "unterminated quoted string")
 }
 
 // lexNumber scans a number: a float, decimal integer or hex integer.
@@ -274,6 +263,35 @@ func lexNumber(l *lexer) stateFn {
 
 func lexIndex(l *lexer) stateFn {
 	return errorf(l, "indexes are not supported yet")
+}
+
+func lexRaw(l *lexer) stateFn {
+	pin := l.pin
+	l.emitValue(tokenRaw, l.pin, "")
+	stop := "{end}"
+	if l.acceptMany(sWhitespace) {
+		l.skip()
+		if l.accept('"') {
+			if scanQuote(l) {
+				stop = l.input[l.pin+1:l.pos-1]
+			} else {
+				return errorf(l, "unterminated quoted string")
+			}
+		}
+	}
+	if !l.accept('}') {
+		return errorf(l, "bad raw tag: %q", l.input[pin:l.pos])
+	}
+	l.skip()
+	i := strings.Index(l.input[l.pos:], stop)
+	if i < 0 {
+		return errorf(l, "unterminated raw content: %q", l.input[pin:l.pos])
+	}
+	l.pos += i
+	l.emit(tokenRawText)
+	l.pos += len(stop)
+	l.skip()
+	return lexFile
 }
 
 // scanNumber scans a number.
@@ -299,7 +317,7 @@ func scanNumber(l *lexer) (t tokenType, ok bool) {
 	t = tokenInt
 	if l.acceptPrefix("0x") {
 		// Hexadecimal.
-		if l.acceptMany(sHexDigits) == "" {
+		if !l.acceptMany(sHexDigits) {
 			// Requires at least one digit.
 			return
 		}
@@ -309,13 +327,13 @@ func scanNumber(l *lexer) (t tokenType, ok bool) {
 		}
 	} else {
 		// Decimal.
-		if l.acceptMany(sDecDigits) == "" {
+		if !l.acceptMany(sDecDigits) {
 			// Requires at least one digit.
 			return
 		}
 		if l.accept('.') {
 			// Float.
-			if l.acceptMany(sDecDigits) == "" {
+			if !l.acceptMany(sDecDigits) {
 				// Requires a digit after the dot.
 				return
 			}
@@ -329,7 +347,7 @@ func scanNumber(l *lexer) (t tokenType, ok bool) {
 		}
 		if l.accept('e') {
 			l.acceptOne("+-")
-			if l.acceptMany(sDecDigits) == "" {
+			if !l.acceptMany(sDecDigits) {
 				// A digit is required after the scientific notation.
 				return
 			}
@@ -337,10 +355,29 @@ func scanNumber(l *lexer) (t tokenType, ok bool) {
 		}
 	}
 	// Next thing must not be alphanumeric.
-	if l.acceptMany(sAlphaNum) != "" {
+	if l.acceptMany(sAlphaNum) {
 		return
 	}
 	return t, true
+}
+
+// lexQuote scans a quoted string.
+func scanQuote(l *lexer) bool {
+Loop:
+	for {
+		switch l.nextRune() {
+		case '\\':
+			if r := l.nextRune(); r != eof && r != '\n' {
+				break
+			}
+			fallthrough
+		case eof, '\n':
+			return false
+		case '"':
+			break Loop
+		}
+	}
+	return true
 }
 
 // helpers --------------------------------------------------------------------
@@ -358,6 +395,10 @@ func emitText(l *lexer, offset int) {
 		l.emitValue(tokenText, l.pin, l.input[l.pin:pin])
 		l.pin = pin
 	}
+}
+
+func isDigit(r rune) bool {
+	return '0' <= r && r <= '9'
 }
 
 // isAlphaNumeric reports whether r is an alphabetic, digit, or underscore.

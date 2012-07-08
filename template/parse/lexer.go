@@ -116,30 +116,32 @@ func (l *lexer) accept(r rune) bool {
 
 // acceptOne consumes a rune if it matches a set of runes and returns
 // the consumed rune.
-func (l *lexer) acceptOne(valid string) rune {
+func (l *lexer) acceptOne(valid string) bool {
 	if i := strings.IndexRune(valid, l.nextRune()); i >= 0 {
-		return rune(valid[i])
+		return true
 	}
 	l.backup()
-	return -1
+	return false
 }
 
 // acceptMany consumes the input while it matches a set of runes and returns
 // the consumed string.
-func (l *lexer) acceptMany(valid string) string {
+func (l *lexer) acceptMany(valid string) bool {
 	pos := l.pos
 	for strings.IndexRune(valid, l.nextRune()) >= 0 {
 	}
 	l.backup()
-	return l.input[pos:l.pos]
+	return l.pos > pos
 }
 
 // acceptPrefix consumes the input it matches a prefix.
 func (l *lexer) acceptPrefix(prefix string) bool {
-	if l.pos < len(l.input) && strings.HasPrefix(l.input[l.pos:], prefix) {
-		l.width = utf8.RuneCountInString(prefix)
-		l.pos += l.width
-		return true
+	if l.pos < len(l.input) {
+		if strings.HasPrefix(l.input[l.pos:], prefix) {
+			l.width = utf8.RuneCountInString(prefix)
+			l.pos += l.width
+			return true
+		}
 	}
 	return false
 }
@@ -147,33 +149,34 @@ func (l *lexer) acceptPrefix(prefix string) bool {
 // acceptUntilRune consumes the input until the given rune is found
 // (inclusive) and returns the consumed string. The position doesn't change
 // if there's no match.
-func (l *lexer) acceptUntilRune(r rune) string {
+func (l *lexer) acceptUntilRune(r rune) bool {
 	pos := l.pos
 	for {
-		if l.accept(r) {
-			return l.input[pos:l.pos]
-		}
-		if l.nextRune() == eof {
-			break
+		n := l.nextRune()
+		switch n {
+		case r:
+			return true
+		case eof:
+			l.pos = pos
+			return false
 		}
 	}
-	l.pos = pos
-	return ""
+	panic("unreachable")
 }
 
 // acceptUntilPrefix consumes the input until the given prefix is found
 // (inclusive) and returns the consumed string. The position doesn't change
 // if there's no match.
-func (l *lexer) acceptUntilPrefix(prefix string) string {
+func (l *lexer) acceptUntilPrefix(prefix string) bool {
 	if l.pos < len(l.input) {
 		if i := strings.Index(l.input[l.pos:], prefix); i >= 0 {
-			s := l.input[l.pos:l.pos+i]
+			s := l.input[l.pos:l.pos+i+len(prefix)]
 			l.width = utf8.RuneCountInString(s)
 			l.pos += l.width
-			return s
+			return true
 		}
 	}
-	return ""
+	return false
 }
 
 // test -----------------------------------------------------------------------
