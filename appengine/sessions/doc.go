@@ -3,12 +3,12 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package gorilla/appengine/sessions implements session stores for Google App
+Package sadbox/appengine/sessions implements session stores for Google App
 Engine's datastore and memcache.
 
 Usage is the same as described in gorilla/sessions documentation:
 
-	http://gorilla-web.appspot.com/pkg/gorilla/sessions
+	http://gorilla-web.appspot.com/pkg/sessions
 
 ...but you'll use the DatastoreStore or MemcacheStore to load and save your
 sessions. Let's initialize both:

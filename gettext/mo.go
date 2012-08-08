@@ -12,7 +12,7 @@ import (
 	"io"
 	"strings"
 
-	"code.google.com/p/gorilla/gettext/pluralforms"
+	"code.google.com/p/sadbox/gettext/pluralforms"
 )
 
 const (

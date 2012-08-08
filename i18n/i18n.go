@@ -7,10 +7,10 @@ package i18n
 // Catalog types return translations for messages and plurals.
 type Catalog interface {
 	// Get returns a translation for the given key.
-	// Extra arguments or optional, used to format the translation.
+	// Extra arguments are optional, used to format the translation.
 	Get(key string, a ...interface{}) string
 	// GetPlural returns a plural translation for the given key and number.
-	// Extra arguments or optional, used to format the translation.
+	// Extra arguments are optional, used to format the translation.
 	//
 	// Note: while ngettext accepts two string arguments, other systems
 	// normally just accept a key. To follow ngettext strictly,

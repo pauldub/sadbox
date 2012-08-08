@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package gorilla/color provides converters for different color models.
+Package sadbox/color provides converters for different color models.
 
 It implements Hex, HSL and HSV models following the interfaces defined in
 the standard image/color package.

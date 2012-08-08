@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"sort"
 
-	"code.google.com/p/gorilla/gettext/pluralforms"
+	"code.google.com/p/sadbox/gettext/pluralforms"
 )
 
 var ErrMissingContext = errors.New("The message doesn't have a context.")

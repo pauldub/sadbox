@@ -13,7 +13,7 @@ import (
 	"appengine/datastore"
 	"appengine/memcache"
 
-	"code.google.com/p/gorilla/appengine/context"
+	"code.google.com/p/sadbox/appengine/context"
 	"code.google.com/p/gorilla/securecookie"
 	"code.google.com/p/gorilla/sessions"
 )
@@ -145,12 +145,12 @@ func (s *DatastoreStore) load(r *http.Request,
 // NewMemcacheStore returns a new MemcacheStore.
 //
 // The keyPrefix argument is the prefix used for memcache keys. If empty it
-// will use "gorilla.appengine.sessions.".
+// will use "sadbox.appengine.sessions.".
 //
 // See NewCookieStore() for a description of the other parameters.
 func NewMemcacheStore(keyPrefix string, keyPairs ...[]byte) *MemcacheStore {
 	if keyPrefix == "" {
-		keyPrefix = "gorilla.appengine.sessions."
+		keyPrefix = "sadbox.appengine.sessions."
 	}
 	return &MemcacheStore{
 		Codecs: securecookie.CodecsFromPairs(keyPairs...),

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"testing"
 
-	"code.google.com/p/gorilla/appengine/context"
+	"code.google.com/p/sadbox/appengine/context"
 	"code.google.com/p/gorilla/sessions"
 )
 

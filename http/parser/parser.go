@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package gorilla/http/parser offers utilities to parse HTTP headers.
+Package sadbox/http/parser offers utilities to parse HTTP headers.
 */
 package parser
 

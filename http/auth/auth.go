@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package gorilla/http/auth parses "Authorization" request headers.
+Package sadbox/http/auth parses "Authorization" request headers.
 
 The framework is defined by RFC2617, "HTTP Authentication: Basic and Digest
 Access Authentication":
@@ -18,7 +18,7 @@ import (
 	"net/http"
 	"strings"
 
-	"code.google.com/p/gorilla/http/parser"
+	"code.google.com/p/sadbox/http/parser"
 )
 
 // ParseRequest extracts an "Authorization" header from a request and returns

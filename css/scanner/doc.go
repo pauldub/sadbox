@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package gorilla/css/scanner generates tokens for a CSS3 input.
+Package sadbox/css/scanner generates tokens for a CSS3 input.
 
 It follows the CSS3 specification located at:
 
