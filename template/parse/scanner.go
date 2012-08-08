@@ -20,11 +20,8 @@ const (
 	TokenString	  // string or raw string
 	// Words and text
 	TokenIdent    // alphanumeric identifier
-	TokenTag      // registered tag name
-	TokenEnd      // tag close: 'end'
-	TokenFunc     // registered function name
 	TokenText     // plain text outside of tags
-	// Special characters used in tags
+	// Special characters used inside tags
 	TokenLDelim   // registered left tag delimiter; '{' by default
 	TokenRDelim   // registered right tag delimiter; '}' by default
 	TokenLParen   // (
@@ -70,9 +67,6 @@ var tokenName = map[TokenType]string{
 	TokenNil:      "nil",
 	TokenString:   "string",
 	TokenIdent:    "ident",
-	TokenTag:      "tag",
-	TokenEnd:      "end",
-	TokenFunc:     "func",
 	TokenText:     "text",
 	TokenLDelim:   "left delim",
 	TokenRDelim:   "right delim",
@@ -299,21 +293,9 @@ func (s *Scanner) emit(typ TokenType) {
 
 // error emits an error token and terminates the scan by passing
 // back a nil pointer that will be the next state, terminating the scan.
-func (s *Scanner) errorf(pos int, format string, args ...interface{}) stateFn {
-	s.tokens <- Token{TokenError, fmt.Sprintf(format, args...), pos}
+func (s *Scanner) errorf(format string, args ...interface{}) stateFn {
+	s.tokens <- Token{TokenError, fmt.Sprintf(format, args...), s.pin}
 	return nil
-}
-
-// isTag returns true if the given identifier is a registered tag.
-func (s *Scanner) isTag(ident string) bool {
-	// TODO
-	return false
-}
-
-// isFunc returns true if the given identifier is a registered function.
-func (s *Scanner) isFunc(ident string) bool {
-	// TODO
-	return false
 }
 
 // pushBrace increments the balance stack for braces, brackets and parentheses.
@@ -362,11 +344,10 @@ func scanRoot(s *Scanner) stateFn {
 func scanLeftDelim(s *Scanner) stateFn {
 	if strings.HasPrefix(s.src[s.pos:], s.lDelim+lComment) {
 		// Comment tag: ignore.
-		pos := s.pos
 		s.pos += len(s.lDelim) + len(lComment)
 		i := strings.Index(s.src[s.pos:], rComment + s.rDelim)
 		if i < 0 {
-			return s.errorf(pos, "unclosed comment tag")
+			return s.errorf("unclosed comment tag")
 		}
 		s.pos += i + len(rComment) + len(s.rDelim)
 		s.skip()
@@ -381,7 +362,6 @@ func scanLeftDelim(s *Scanner) stateFn {
 func scanRightDelim(s *Scanner) stateFn {
 	s.pos += len(s.rDelim)
 	s.emit(TokenRDelim)
-	// TODO: this can be scanTemplate
 	return scanRoot
 }
 
@@ -391,10 +371,9 @@ func scanInsideTag(s *Scanner) stateFn {
 		// Only close the tag when there are no remaining open braces.
 		return scanRightDelim
 	}
-	pos := s.pos
 	switch r := s.Next(); {
 	case r == EOF:
-		return s.errorf(pos, "unclosed action")
+		return s.errorf("unclosed tag")
 	case isSpace(r):
 		s.skip()
 	case r == '"':
@@ -411,14 +390,13 @@ func scanInsideTag(s *Scanner) stateFn {
 	case r <= unicode.MaxASCII && unicode.IsPrint(r):
 		s.emit(TokenChar)
 	default:
-		return s.errorf(pos, "unrecognized character inside tag: %#U", r)
+		return s.errorf("unrecognized character inside tag: %#U", r)
 	}
 	return scanInsideTag
 }
 
 // scanString scans a quoted string.
 func scanString(s *Scanner) stateFn {
-	pos := s.pos - 1
 Loop:
 	for {
 		switch s.Next() {
@@ -428,7 +406,7 @@ Loop:
 			}
 			fallthrough
 		case EOF, '\n':
-			return s.errorf(pos, "unterminated quoted string")
+			return s.errorf("unterminated quoted string")
 		case '"':
 			break Loop
 		}
@@ -439,10 +417,9 @@ Loop:
 
 // scanNumber scans a number.
 func scanNumber(s *Scanner) stateFn {
-	pos := s.pos
-	typ, ok := scanNumberType(s)
-	if !ok {
-		return s.errorf(pos, "bad number syntax: %q", s.src[s.pin:s.pos])
+	typ, fn := scanNumberType(s)
+	if fn != nil{
+		return fn
 	}
 	// Emits TokenFloat or TokenInt.
 	s.emit(typ)
@@ -451,8 +428,8 @@ func scanNumber(s *Scanner) stateFn {
 
 // scanNumberType scans a number.
 //
-// It returns a TokenFloat or TokenInt and a flag indicating if an error
-// was found.
+// It returns a TokenFloat or TokenInt, if everything goes well, and a state
+// function if an error was found.
 //
 // Floats must be in decimal and must either:
 //
@@ -468,7 +445,7 @@ func scanNumber(s *Scanner) stateFn {
 //       e.g. 0x1A2B).
 //
 // Unary operator minus is not scanned here.
-func scanNumberType(s *Scanner) (t TokenType, ok bool) {
+func scanNumberType(s *Scanner) (TokenType, stateFn) {
 	r := s.Next()
 	if r == '0' {
 		// hexadecimal int or float
@@ -479,9 +456,10 @@ func scanNumberType(s *Scanner) (t TokenType, ok bool) {
 			}
 			s.backup()
 			if !atNumberTerminator(s) {
-				return TokenError, false
+				return TokenError, s.errorf("bad hexadecimal int syntax: %q",
+					s.src[s.pin:s.pos])
 			}
-			return TokenInt, true
+			return TokenInt, nil
 		} else {
 			// float
 			// Not manny options after 0: only '.' or 'e'.
@@ -497,9 +475,9 @@ func scanNumberType(s *Scanner) (t TokenType, ok bool) {
 	if r != '.' && r != 'e' {
 		// decimal int
 		if !atNumberTerminator(s) {
-			return TokenError, false
+			return TokenError, s.errorf("bad character after int: %#U", r)
 		}
-		return TokenInt, true
+		return TokenInt, nil
 	}
 	// float
 	return scanFractionOrExponent(s)
@@ -507,7 +485,7 @@ func scanNumberType(s *Scanner) (t TokenType, ok bool) {
 
 // scanFractionOrExponent scans a fraction or exponent part of a float.
 // The next character is expected to be '.' or 'e'.
-func scanFractionOrExponent(s *Scanner) (t TokenType, ok bool) {
+func scanFractionOrExponent(s *Scanner) (TokenType, stateFn) {
 	r := s.Next()
 	switch r {
 	case '.':
@@ -518,7 +496,8 @@ func scanFractionOrExponent(s *Scanner) (t TokenType, ok bool) {
 			r = s.Next()
 		}
 	default:
-		return TokenError, false
+		return TokenError, s.errorf("bad float syntax: %q",
+			s.src[s.pin:s.pos])
 	}
 	seenDecimal := false
 	for isDecimal(r) {
@@ -526,15 +505,17 @@ func scanFractionOrExponent(s *Scanner) (t TokenType, ok bool) {
 		seenDecimal = true
 	}
 	s.backup()
-	if !seenDecimal || !atNumberTerminator(s) {
-		return TokenError, false
+	if !seenDecimal {
+		return TokenError, s.errorf("expected a decimal after '.' or 'e'")
 	}
-	return TokenFloat, true
+	if !atNumberTerminator(s) {
+		return TokenError, s.errorf("bad character after float: %#U", s.Peek())
+	}
+	return TokenFloat, nil
 }
 
 // scanIdent scans an alphanumeric identifier.
 func scanIdent(s *Scanner) stateFn {
-	pos := s.pos
 Loop:
 	for {
 		switch r := s.Next(); {
@@ -543,21 +524,13 @@ Loop:
 		default:
 			s.backup()
 			if !atIdentTerminator(s) {
-				return s.errorf(pos, "bad character %#U", r)
+				return s.errorf("bad character after identifier: %#U", r)
 			}
 			switch word := s.src[s.pin:s.pos]; {
 			case word == "true", word == "false":
 				s.emit(TokenBool)
 			case word == "nil":
 				s.emit(TokenNil)
-			case word == "end":
-				s.emit(TokenEnd)
-			case s.isTag(word):
-				// TODO: check if tag has end, and build a stack to know inside
-				// which tag we are
-				s.emit(TokenTag)
-			case s.isFunc(word):
-				s.emit(TokenFunc)
 			default:
 				s.emit(TokenIdent)
 			}
@@ -569,7 +542,6 @@ Loop:
 
 // scanString scans a symbol.
 func scanSymbol(s *Scanner) stateFn {
-	pos := s.pos
 	r := s.Next()
 	switch r {
 	case '.', ',':
@@ -577,7 +549,7 @@ func scanSymbol(s *Scanner) stateFn {
 	case '&':
 		// &&
 		if s.Next() != '&' {
-			return s.errorf(pos, "expected &&")
+			return s.errorf("expected &&")
 		}
 		s.emit(TokenAnd)
 	case '|':
@@ -613,12 +585,12 @@ func scanSymbol(s *Scanner) stateFn {
 	case ')', '}', ']':
 		str := string(r)
 		if err := s.popBrace(str); err != nil {
-			return s.errorf(pos, err.Error())
+			return s.errorf(err.Error())
 		}
 		s.emit(stringToType[str])
 	default:
-		// should never happen.
-		return s.errorf(pos, "unrecognized symbol: %#U", r)
+		// Should never happen.
+		return s.errorf("unrecognized symbol: %#U", r)
 	}
 	return scanInsideTag
 }
