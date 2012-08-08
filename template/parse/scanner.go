@@ -183,7 +183,7 @@ const (
 )
 
 // balanced delimiters shortcut.
-var delims = map[string]string {
+var braces = map[string]string {
 	"(": ")",
 	"{": "}",
 	"[": "]",
@@ -203,7 +203,6 @@ func newScanner(name, source, left, right string) *Scanner {
 		lDelim: left,
 		rDelim: right,
 		tokens: make(chan Token),
-		stack:  newStack(),
 	}
 	go func() {
 		for s.state = scanRoot; s.state != nil; {
@@ -228,8 +227,8 @@ type Scanner struct {
 	rDelim string     // right tag delimiter
 	state  stateFn    // the next scanning function to enter
 	tokens chan Token // channel of scanned tokens
-	stack  *stack     // LIFO stack for token backup
-	delims []string   // balance stack for braces, brackets and parentheses
+	stack  []Token    // LIFO stack for token backup
+	braces []string   // balance stack for braces, brackets and parentheses
 }
 
 // Public API -----------------------------------------------------------------
@@ -263,8 +262,10 @@ func (s *Scanner) Peek() rune {
 
 // NextToken returns the next token in the input.
 func (s *Scanner) NextToken() Token {
-	if s.stack.count > 0 {
-		return s.stack.pop()
+	if size := len(s.stack); size > 0 {
+		tok := s.stack[size-1]
+		s.stack = s.stack[:size-1]
+		return tok
 	}
 	if tok, ok := <-s.tokens; ok {
 		return tok
@@ -275,7 +276,7 @@ func (s *Scanner) NextToken() Token {
 // PushToken pushes back a token to the token stack. This is a LIFO stack:
 // the last pushed token is the first returned by NextToken.
 func (s *Scanner) PushToken(t Token) {
-	s.stack.push(t)
+	s.stack = append(s.stack, t)
 }
 
 // Non-public API -------------------------------------------------------------
@@ -315,20 +316,20 @@ func (s *Scanner) isFunc(ident string) bool {
 	return false
 }
 
-// pushDelim increments the balance stack for braces, brackets and parentheses.
-func (s *Scanner) pushDelim(delim string) {
-	s.delims = append(s.delims, delim)
+// pushBrace increments the balance stack for braces, brackets and parentheses.
+func (s *Scanner) pushBrace(delim string) {
+	s.braces = append(s.braces, delim)
 }
 
-// popDelim decrements the balance stack for braces, brackets and parentheses.
-func (s *Scanner) popDelim(delim string) error {
-	if len(s.delims) > 0 {
-		exp := s.delims[len(s.delims)-1]
+// popBrace decrements the balance stack for braces, brackets and parentheses.
+func (s *Scanner) popBrace(delim string) error {
+	if size := len(s.braces); size > 0 {
+		exp := s.braces[size-1]
 		if exp != delim {
 			return fmt.Errorf("unbalanced delimiters: expected %q, got %q",
 				exp, delim)
 		}
-		s.delims = s.delims[:len(s.delims)-1]
+		s.braces = s.braces[:size-1]
 	} else {
 		return fmt.Errorf("unbalanced delimiters: unexpected %q", delim)
 	}
@@ -403,7 +404,7 @@ func scanInsideTag(s *Scanner) stateFn {
 		return scanNumber
 	case isAlphaNumeric(r):
 		s.backup()
-		return scanIdentifier
+		return scanIdent
 	case isSymbol(r):
 		s.backup()
 		return scanSymbol
@@ -531,8 +532,8 @@ func scanFractionOrExponent(s *Scanner) (t TokenType, ok bool) {
 	return TokenFloat, true
 }
 
-// scanIdentifier scans an alphanumeric identifier.
-func scanIdentifier(s *Scanner) stateFn {
+// scanIdent scans an alphanumeric identifier.
+func scanIdent(s *Scanner) stateFn {
 	pos := s.pos
 Loop:
 	for {
@@ -607,11 +608,11 @@ func scanSymbol(s *Scanner) stateFn {
 		s.emit(stringToType[t])
 	case '(', '{', '[':
 		str := string(r)
-		s.pushDelim(delims[str])
+		s.pushBrace(braces[str])
 		s.emit(stringToType[str])
 	case ')', '}', ']':
 		str := string(r)
-		if err := s.popDelim(str); err != nil {
+		if err := s.popBrace(str); err != nil {
 			return s.errorf(pos, err.Error())
 		}
 		s.emit(stringToType[str])
@@ -660,7 +661,7 @@ func isHexadecimal(r rune) bool {
 
 // atRightDelim reports whether the input is at a right delimiter.
 func atRightDelim(s *Scanner) bool {
-	return len(s.delims) == 0 && strings.HasPrefix(s.src[s.pos:], s.rDelim)
+	return len(s.braces) == 0 && strings.HasPrefix(s.src[s.pos:], s.rDelim)
 }
 
 // atNumberTerminator reports whether the input is a valid character to
@@ -695,39 +696,4 @@ func atIdentTerminator(s *Scanner) bool {
 		return true
 	}
 	return false
-}
-
-// LIFO stack -----------------------------------------------------------------
-
-// newStack returns a token stack.
-func newStack() *stack {
-	return &stack{tokens: make([]Token, 10)}
-}
-
-// stack is a LIFO stack for tokens that resizes as needed.
-type stack struct {
-	tokens []Token
-	count  int
-}
-
-// pop returns the next token from the stack.
-func (s *stack) pop() Token {
-	if s.count == 0 {
-		// It is never called when it is empty.
-		panic("stack is empty")
-	}
-	s.count--
-	return s.tokens[s.count]
-}
-
-// push puts a token back to the stack.
-func (s *stack) push(t Token) {
-	if s.count >= len(s.tokens) {
-		// Resizes as needed.
-		tokens := make([]Token, len(s.tokens)*2)
-		copy(tokens, s.tokens)
-		s.tokens = tokens
-	}
-	s.tokens[s.count] = t
-	s.count++
 }
