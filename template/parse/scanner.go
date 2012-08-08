@@ -235,25 +235,6 @@ func (s *Scanner) Position(pos int) (int, int) {
 	return line, column
 }
 
-// Next consumes and returns the next rune in the input. It returns EOF at the
-// end of the input.
-func (s *Scanner) Next() (r rune) {
-	if s.pos >= len(s.src) {
-		s.width = 0
-		return EOF
-	}
-	r, s.width = utf8.DecodeRuneInString(s.src[s.pos:])
-	s.pos += s.width
-	return r
-}
-
-// Peek returns but does not consume the next rune in the input.
-func (s *Scanner) Peek() rune {
-	r := s.Next()
-	s.backup()
-	return r
-}
-
 // NextToken returns the next token in the input.
 func (s *Scanner) NextToken() Token {
 	if size := len(s.stack); size > 0 {
@@ -274,6 +255,25 @@ func (s *Scanner) PushToken(t Token) {
 }
 
 // Non-public API -------------------------------------------------------------
+
+// next consumes and returns the next rune in the input. It returns EOF at the
+// end of the input.
+func (s *Scanner) next() (r rune) {
+	if s.pos >= len(s.src) {
+		s.width = 0
+		return EOF
+	}
+	r, s.width = utf8.DecodeRuneInString(s.src[s.pos:])
+	s.pos += s.width
+	return r
+}
+
+// peek returns but does not consume the next rune in the input.
+func (s *Scanner) peek() rune {
+	r := s.next()
+	s.backup()
+	return r
+}
 
 // backup steps back one rune. Can only be called once per call of Next.
 func (s *Scanner) backup() {
@@ -329,7 +329,7 @@ func scanTemplate(s *Scanner) stateFn {
 			}
 			return scanLeftDelim
 		}
-		if s.Next() == EOF {
+		if s.next() == EOF {
 			break
 		}
 	}
@@ -371,7 +371,7 @@ func scanInsideTag(s *Scanner) stateFn {
 		// Only close the tag when there are no remaining open braces.
 		return scanRightDelim
 	}
-	switch r := s.Next(); {
+	switch r := s.next(); {
 	case r == EOF:
 		return s.errorf("unclosed tag")
 	case isSpace(r):
@@ -399,9 +399,9 @@ func scanInsideTag(s *Scanner) stateFn {
 func scanString(s *Scanner) stateFn {
 Loop:
 	for {
-		switch s.Next() {
+		switch s.next() {
 		case '\\':
-			if r := s.Next(); r != EOF && r != '\n' {
+			if r := s.next(); r != EOF && r != '\n' {
 				break
 			}
 			fallthrough
@@ -435,13 +435,13 @@ Loop:
 //
 // Unary operator minus is not scanned here.
 func scanNumber(s *Scanner) stateFn {
-	r := s.Next()
+	r := s.next()
 	if r == '0' {
 		// hexadecimal int or float
-		r = s.Next()
+		r = s.next()
 		if r == 'x' {
 			// hexadecimal int
-			for isHexadecimal(s.Next()) {
+			for isHexadecimal(s.next()) {
 			}
 			s.backup()
 			s.emit(TokenInt)
@@ -455,7 +455,7 @@ func scanNumber(s *Scanner) stateFn {
 	}
 	// decimal int or float
 	for isDecimal(r) {
-		r = s.Next()
+		r = s.next()
 	}
 	s.backup()
 	if r != '.' && r != 'e' {
@@ -470,21 +470,21 @@ func scanNumber(s *Scanner) stateFn {
 // scanFractionOrExponent scans a fraction or exponent part of a float.
 // The next character is expected to be '.' or 'e'.
 func scanFractionOrExponent(s *Scanner) stateFn {
-	r := s.Next()
+	r := s.next()
 	switch r {
 	case '.':
-		r = s.Next()
+		r = s.next()
 	case 'e':
-		r = s.Next()
+		r = s.next()
 		if r == '-' || r == '+' {
-			r = s.Next()
+			r = s.next()
 		}
 	default:
 		return s.errorf("bad float syntax: %q",	s.src[s.pin:s.pos])
 	}
 	seenDecimal := false
 	for isDecimal(r) {
-		r = s.Next()
+		r = s.next()
 		seenDecimal = true
 	}
 	s.backup()
@@ -499,7 +499,7 @@ func scanFractionOrExponent(s *Scanner) stateFn {
 func scanIdent(s *Scanner) stateFn {
 Loop:
 	for {
-		switch r := s.Next(); {
+		switch r := s.next(); {
 		case isAlphaNumeric(r):
 			// absorb.
 		default:
@@ -520,19 +520,19 @@ Loop:
 
 // scanString scans a symbol.
 func scanSymbol(s *Scanner) stateFn {
-	r := s.Next()
+	r := s.next()
 	switch r {
 	case '.', ',':
 		s.emit(symbolToType[string(r)])
 	case '&':
 		// &&
-		if s.Next() != '&' {
+		if s.next() != '&' {
 			return s.errorf("expected &&")
 		}
 		s.emit(TokenAnd)
 	case '|':
 		// |, ||
-		if s.Next() == '|' {
+		if s.next() == '|' {
 			s.emit(TokenOr)
 		} else {
 			s.backup()
@@ -550,7 +550,7 @@ func scanSymbol(s *Scanner) stateFn {
 		// <, <=
 		// >, >=
 		t := string(r)
-		if s.Next() == '=' {
+		if s.next() == '=' {
 			t += "="
 		} else {
 			s.backup()
