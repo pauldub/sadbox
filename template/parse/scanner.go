@@ -455,10 +455,6 @@ func scanNumberType(s *Scanner) (TokenType, stateFn) {
 			for isHexadecimal(s.Next()) {
 			}
 			s.backup()
-			if !atNumberTerminator(s) {
-				return TokenError, s.errorf("bad hexadecimal int syntax: %q",
-					s.src[s.pin:s.pos])
-			}
 			return TokenInt, nil
 		} else {
 			// float
@@ -474,9 +470,6 @@ func scanNumberType(s *Scanner) (TokenType, stateFn) {
 	s.backup()
 	if r != '.' && r != 'e' {
 		// decimal int
-		if !atNumberTerminator(s) {
-			return TokenError, s.errorf("bad character after int: %#U", r)
-		}
 		return TokenInt, nil
 	}
 	// float
@@ -508,9 +501,6 @@ func scanFractionOrExponent(s *Scanner) (TokenType, stateFn) {
 	if !seenDecimal {
 		return TokenError, s.errorf("expected a decimal after '.' or 'e'")
 	}
-	if !atNumberTerminator(s) {
-		return TokenError, s.errorf("bad character after float: %#U", s.Peek())
-	}
 	return TokenFloat, nil
 }
 
@@ -523,9 +513,6 @@ Loop:
 			// absorb.
 		default:
 			s.backup()
-			if !atIdentTerminator(s) {
-				return s.errorf("bad character after identifier: %#U", r)
-			}
 			switch word := s.src[s.pin:s.pos]; {
 			case word == "true", word == "false":
 				s.emit(TokenBool)
@@ -634,38 +621,4 @@ func isHexadecimal(r rune) bool {
 // atRightDelim reports whether the input is at a right delimiter.
 func atRightDelim(s *Scanner) bool {
 	return len(s.braces) == 0 && strings.HasPrefix(s.src[s.pos:], s.rDelim)
-}
-
-// atNumberTerminator reports whether the input is a valid character to
-// appear after a number.
-func atNumberTerminator(s *Scanner) bool {
-	switch r := s.Peek(); {
-	// All spaces and most symbols (excludes dot and open braces).
-	case isSpace(r):
-		return true
-	case isSymbol(r):
-		switch r {
-		case '.', '(', '[', '{':
-			return false
-		}
-		return true
-	case atRightDelim(s):
-		return true
-	}
-	return false
-}
-
-// atIdentTerminator reports whether the input is a valid character to
-// appear after an identifier.
-func atIdentTerminator(s *Scanner) bool {
-	switch r := s.Peek(); {
-	// All spaces and symbols.
-	case isSpace(r):
-		return true
-	case isSymbol(r):
-		return true
-	case atRightDelim(s):
-		return true
-	}
-	return false
 }
