@@ -104,7 +104,7 @@ var tokenName = map[TokenType]string{
 	TokenChar:     "char",
 }
 
-var stringToType = map[string]TokenType {
+var symbolToType = map[string]TokenType {
 	"(":  TokenLParen,
 	")":  TokenRParen,
 	"{":  TokenLBrace,
@@ -148,9 +148,9 @@ func (t TokenType) String() string {
 
 // Token represents a scanned token.
 type Token struct {
-	Typ TokenType
-	Val string
-	Pos int
+	Typ TokenType // type of the token
+	Val string    // value of the token
+	Pos int       // position of the token in the input, in bytes
 }
 
 func (t Token) String() string {
@@ -199,7 +199,7 @@ func newScanner(name, source, left, right string) *Scanner {
 		tokens: make(chan Token),
 	}
 	go func() {
-		for s.state = scanRoot; s.state != nil; {
+		for s.state = scanTemplate; s.state != nil; {
 			s.state = s.state(s)
 		}
 		close(s.tokens)
@@ -320,8 +320,8 @@ func (s *Scanner) popBrace(delim string) error {
 
 // State functions ------------------------------------------------------------
 
-// scanRoot scans a template root.
-func scanRoot(s *Scanner) stateFn {
+// scanTemplate scans a template root.
+func scanTemplate(s *Scanner) stateFn {
 	for {
 		if strings.HasPrefix(s.src[s.pos:], s.lDelim) {
 			if s.pos > s.pin {
@@ -351,7 +351,7 @@ func scanLeftDelim(s *Scanner) stateFn {
 		}
 		s.pos += i + len(rComment) + len(s.rDelim)
 		s.skip()
-		return scanRoot
+		return scanTemplate
 	}
 	s.pos += len(s.lDelim)
 	s.emit(TokenLDelim)
@@ -362,7 +362,7 @@ func scanLeftDelim(s *Scanner) stateFn {
 func scanRightDelim(s *Scanner) stateFn {
 	s.pos += len(s.rDelim)
 	s.emit(TokenRDelim)
-	return scanRoot
+	return scanTemplate
 }
 
 // scanInsideTag scans the elements inside tag delimiters.
@@ -378,7 +378,7 @@ func scanInsideTag(s *Scanner) stateFn {
 		s.skip()
 	case r == '"':
 		return scanString
-	case '0' <= r && r <= '9':
+	case isDecimal(r):
 		s.backup()
 		return scanNumber
 	case isAlphaNumeric(r):
@@ -416,17 +416,6 @@ Loop:
 }
 
 // scanNumber scans a number.
-func scanNumber(s *Scanner) stateFn {
-	typ, fn := scanNumberType(s)
-	if fn != nil{
-		return fn
-	}
-	// Emits TokenFloat or TokenInt.
-	s.emit(typ)
-	return scanInsideTag
-}
-
-// scanNumberType scans a number.
 //
 // It returns a TokenFloat or TokenInt, if everything goes well, and a state
 // function if an error was found.
@@ -445,7 +434,7 @@ func scanNumber(s *Scanner) stateFn {
 //       e.g. 0x1A2B).
 //
 // Unary operator minus is not scanned here.
-func scanNumberType(s *Scanner) (TokenType, stateFn) {
+func scanNumber(s *Scanner) stateFn {
 	r := s.Next()
 	if r == '0' {
 		// hexadecimal int or float
@@ -455,7 +444,8 @@ func scanNumberType(s *Scanner) (TokenType, stateFn) {
 			for isHexadecimal(s.Next()) {
 			}
 			s.backup()
-			return TokenInt, nil
+			s.emit(TokenInt)
+			return scanInsideTag
 		} else {
 			// float
 			// Not manny options after 0: only '.' or 'e'.
@@ -470,7 +460,8 @@ func scanNumberType(s *Scanner) (TokenType, stateFn) {
 	s.backup()
 	if r != '.' && r != 'e' {
 		// decimal int
-		return TokenInt, nil
+		s.emit(TokenInt)
+		return scanInsideTag
 	}
 	// float
 	return scanFractionOrExponent(s)
@@ -478,7 +469,7 @@ func scanNumberType(s *Scanner) (TokenType, stateFn) {
 
 // scanFractionOrExponent scans a fraction or exponent part of a float.
 // The next character is expected to be '.' or 'e'.
-func scanFractionOrExponent(s *Scanner) (TokenType, stateFn) {
+func scanFractionOrExponent(s *Scanner) stateFn {
 	r := s.Next()
 	switch r {
 	case '.':
@@ -489,8 +480,7 @@ func scanFractionOrExponent(s *Scanner) (TokenType, stateFn) {
 			r = s.Next()
 		}
 	default:
-		return TokenError, s.errorf("bad float syntax: %q",
-			s.src[s.pin:s.pos])
+		return s.errorf("bad float syntax: %q",	s.src[s.pin:s.pos])
 	}
 	seenDecimal := false
 	for isDecimal(r) {
@@ -499,9 +489,10 @@ func scanFractionOrExponent(s *Scanner) (TokenType, stateFn) {
 	}
 	s.backup()
 	if !seenDecimal {
-		return TokenError, s.errorf("expected a decimal after '.' or 'e'")
+		return s.errorf("expected a decimal after '.' or 'e'")
 	}
-	return TokenFloat, nil
+	s.emit(TokenFloat)
+	return scanInsideTag
 }
 
 // scanIdent scans an alphanumeric identifier.
@@ -532,7 +523,7 @@ func scanSymbol(s *Scanner) stateFn {
 	r := s.Next()
 	switch r {
 	case '.', ',':
-		s.emit(stringToType[string(r)])
+		s.emit(symbolToType[string(r)])
 	case '&':
 		// &&
 		if s.Next() != '&' {
@@ -564,17 +555,17 @@ func scanSymbol(s *Scanner) stateFn {
 		} else {
 			s.backup()
 		}
-		s.emit(stringToType[t])
+		s.emit(symbolToType[t])
 	case '(', '{', '[':
 		str := string(r)
 		s.pushBrace(braces[str])
-		s.emit(stringToType[str])
+		s.emit(symbolToType[str])
 	case ')', '}', ']':
 		str := string(r)
 		if err := s.popBrace(str); err != nil {
 			return s.errorf(err.Error())
 		}
-		s.emit(stringToType[str])
+		s.emit(symbolToType[str])
 	default:
 		// Should never happen.
 		return s.errorf("unrecognized symbol: %#U", r)
@@ -600,12 +591,7 @@ func isAlphaNumeric(r rune) bool {
 
 // isSymbol reports whether r is a recognized symbol character.
 func isSymbol(r rune) bool {
-	switch r {
-	case '.', ',', '*', '/', '%', '+', '-', '=', ':', '!', '<', '>',
-		'&', '|', '(', '{', '[', ')', '}', ']':
-		return true
-	}
-	return false
+	return symbolToType[string(r)] > 0
 }
 
 // isDecimal reports whether r is a decimal character.
