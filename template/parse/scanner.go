@@ -17,7 +17,7 @@ const (
 	TokenFloat    // float
 	TokenInt      // decimal or hexadecimal integer
 	TokenNil      // 'nil'
-	TokenString	  // string or raw string
+	TokenString	  // string
 	// Words and text
 	TokenIdent    // alphanumeric identifier
 	TokenText     // plain text outside of tags
@@ -148,18 +148,18 @@ func (t TokenType) String() string {
 
 // Token represents a scanned token.
 type Token struct {
-	Typ TokenType // type of the token
-	Val string    // value of the token
-	Pos int       // position of the token in the input, in bytes
+	Type  TokenType // type of the token
+	Value string    // value of the token
+	Pos   int       // position of the token in the input, in bytes
 }
 
 func (t Token) String() string {
-	if t.Val == "" {
-		return fmt.Sprintf("%s:%d", t.Typ, t.Pos)
-	} else if len(t.Val) > 10 {
-		return fmt.Sprintf("%s:%d:%.35q...", t.Typ, t.Pos, t.Val)
+	if t.Value == "" {
+		return fmt.Sprintf("%s:%d", t.Type, t.Pos)
+	} else if len(t.Value) > 10 {
+		return fmt.Sprintf("%s:%d:%.35q...", t.Type, t.Pos, t.Value)
 	}
-	return fmt.Sprintf("%s:%d:%q", t.Typ, t.Pos, t.Val)
+	return fmt.Sprintf("%s:%d:%q", t.Type, t.Pos, t.Value)
 }
 
 // ----------------------------------------------------------------------------
@@ -175,13 +175,6 @@ const (
 	lComment = "#"
 	rComment = "#"
 )
-
-// balanced delimiters shortcut.
-var braces = map[string]string {
-	"(": ")",
-	"{": "}",
-	"[": "]",
-}
 
 // newScanner creates a new scanner for the source string.
 func newScanner(name, source, left, right string) *Scanner {
@@ -222,7 +215,7 @@ type Scanner struct {
 	state  stateFn    // the next scanning function to enter
 	tokens chan Token // channel of scanned tokens
 	stack  []Token    // LIFO stack for token backup
-	braces []string   // balance stack for braces, brackets and parentheses
+	braces []rune     // balance stack for braces, brackets and parentheses
 }
 
 // Public API -----------------------------------------------------------------
@@ -248,10 +241,17 @@ func (s *Scanner) NextToken() Token {
 	return Token{TokenError, "token stack is empty", s.pos}
 }
 
-// PushToken pushes back a token to the token stack. This is a LIFO stack:
-// the last pushed token is the first returned by NextToken.
-func (s *Scanner) PushToken(t Token) {
-	s.stack = append(s.stack, t)
+// PeekToken returns the next token in the input without consuming it.
+func (s *Scanner) PeekToken() Token {
+	tok := s.NextToken()
+	s.PushToken(tok)
+	return tok
+}
+
+// PushToken pushes back one or more tokens to the token stack. This is a
+// LIFO stack: the last pushed token is the first returned by NextToken.
+func (s *Scanner) PushToken(t ...Token) {
+	s.stack = append(s.stack, t...)
 }
 
 // Non-public API -------------------------------------------------------------
@@ -299,21 +299,22 @@ func (s *Scanner) errorf(format string, args ...interface{}) stateFn {
 }
 
 // pushBrace increments the balance stack for braces, brackets and parentheses.
-func (s *Scanner) pushBrace(delim string) {
+func (s *Scanner) pushBrace(delim rune) {
 	s.braces = append(s.braces, delim)
 }
 
 // popBrace decrements the balance stack for braces, brackets and parentheses.
-func (s *Scanner) popBrace(delim string) error {
+func (s *Scanner) popBrace(delim rune) error {
 	if size := len(s.braces); size > 0 {
 		exp := s.braces[size-1]
 		if exp != delim {
 			return fmt.Errorf("unbalanced delimiters: expected %q, got %q",
-				exp, delim)
+				string(exp), string(delim))
 		}
 		s.braces = s.braces[:size-1]
 	} else {
-		return fmt.Errorf("unbalanced delimiters: unexpected %q", delim)
+		return fmt.Errorf("unbalanced delimiters: unexpected %q",
+			string(delim))
 	}
 	return nil
 }
@@ -372,12 +373,8 @@ func scanInsideTag(s *Scanner) stateFn {
 		return scanRightDelim
 	}
 	switch r := s.next(); {
-	case r == EOF:
-		return s.errorf("unclosed tag")
 	case isSpace(r):
 		s.skip()
-	case r == '"':
-		return scanString
 	case isDecimal(r):
 		s.backup()
 		return scanNumber
@@ -387,6 +384,10 @@ func scanInsideTag(s *Scanner) stateFn {
 	case isSymbol(r):
 		s.backup()
 		return scanSymbol
+	case r == '"':
+		return scanString
+	case r == EOF:
+		return s.errorf("unclosed tag")
 	case r <= unicode.MaxASCII && unicode.IsPrint(r):
 		s.emit(TokenChar)
 	default:
@@ -504,10 +505,10 @@ Loop:
 			// absorb.
 		default:
 			s.backup()
-			switch word := s.src[s.pin:s.pos]; {
-			case word == "true", word == "false":
+			switch s.src[s.pin:s.pos] {
+			case "true", "false":
 				s.emit(TokenBool)
-			case word == "nil":
+			case "nil":
 				s.emit(TokenNil)
 			default:
 				s.emit(TokenIdent)
@@ -522,8 +523,10 @@ Loop:
 func scanSymbol(s *Scanner) stateFn {
 	r := s.next()
 	switch r {
-	case '.', ',':
-		s.emit(symbolToType[string(r)])
+	case '.':
+		s.emit(TokenDot)
+	case ',':
+		s.emit(TokenComma)
 	case '&':
 		// &&
 		if s.next() != '&' {
@@ -556,16 +559,20 @@ func scanSymbol(s *Scanner) stateFn {
 			s.backup()
 		}
 		s.emit(symbolToType[t])
-	case '(', '{', '[':
-		str := string(r)
-		s.pushBrace(braces[str])
-		s.emit(symbolToType[str])
-	case ')', '}', ']':
-		str := string(r)
-		if err := s.popBrace(str); err != nil {
+	case '{':
+		s.pushBrace('}')
+		s.emit(TokenLBrace)
+	case '[':
+		s.pushBrace(']')
+		s.emit(TokenLBracket)
+	case '(':
+		s.pushBrace(')')
+		s.emit(TokenLParen)
+	case '}', ']', ')':
+		if err := s.popBrace(r); err != nil {
 			return s.errorf(err.Error())
 		}
-		s.emit(symbolToType[str])
+		s.emit(symbolToType[string(r)])
 	default:
 		// Should never happen.
 		return s.errorf("unrecognized symbol: %#U", r)
