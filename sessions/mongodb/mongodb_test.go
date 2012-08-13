@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"code.google.com/p/gorilla/sessions"
-	"launchpad.net/mgo"
+	"labix.org/v2/mgo"
 )
 
 // ----------------------------------------------------------------------------
@@ -82,6 +82,7 @@ func TestMongoFlashes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Close()
 	store := NewMongoStore(s.DB("db").C("collection"), []byte("secret-key"))
 	testSessionFlashes(t, store)
 }
