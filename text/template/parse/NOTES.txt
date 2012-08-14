@@ -1,0 +1,27 @@
+{{fill }}
+  // fill can only contain blocks. everything else is ignored.
+{{end}}
+
+
+{{fill "foo"}}
+  {{if .foo}}
+    {{block "main"}}
+      {{fill "bar"}}
+
+      {{end}}
+    {{end}}
+  {{else}}
+    {{block "main"}}
+    {{end}}
+  {{end}}
+{{end}}
+
+Execution:
+
+- evaluate fill and collect a map of evaluated blocks
+- execute template with those blocks in state
+
+- TemplateSet.ParseDirectory
+
+- base.html
+- index.html
