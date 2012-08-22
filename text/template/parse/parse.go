@@ -9,145 +9,114 @@
 package parse
 
 import (
-	"bytes"
 	"fmt"
 	"runtime"
 	"strconv"
 	"unicode"
 )
 
-// Tree is the representation of a single parsed template.
-type Tree struct {
-	Name string    // name of the template represented by the tree.
-	Root *ListNode // top-level root of the tree.
-	// Parsing only; cleared after parse.
+// Parse parses a template string and adds the template nodes to the dst map.
+func Parse(dst map[string]*DefineNode, name, text, leftDelim, rightDelim string, funcs ...map[string]interface{}) error {
+	p := &parser{
+		name:  name,
+		dst:   dst,
+		funcs: funcs,
+		vars:  []string{"$"},
+	}
+	return p.parse("", text, leftDelim, rightDelim)
+}
+
+type parser struct {
+	name      string   // used for debugging only.
+	dst       map[string]*DefineNode
 	funcs     []map[string]interface{}
 	lex       *lexer
-	token     [2]item // two-token lookahead for parser.
+	token     [2]item  // two-token lookahead for parser.
 	peekCount int
 	vars      []string // variables defined at the moment.
 }
 
-// Parse returns a map from template name to parse.Tree, created by parsing the
-// templates described in the argument string. The top-level template will be
-// given the specified name. If an error is encountered, parsing stops and an
-// empty map is returned with the error.
-func Parse(name, text, leftDelim, rightDelim string, funcs ...map[string]interface{}) (treeSet map[string]*Tree, err error) {
-	treeSet = make(map[string]*Tree)
-	_, err = New(name).Parse(text, leftDelim, rightDelim, treeSet, funcs...)
-	return
-}
-
 // next returns the next token.
-func (t *Tree) next() item {
-	if t.peekCount > 0 {
-		t.peekCount--
+func (p *parser) next() item {
+	if p.peekCount > 0 {
+		p.peekCount--
 	} else {
-		t.token[0] = t.lex.nextItem()
+		p.token[0] = p.lex.nextItem()
 	}
-	return t.token[t.peekCount]
+	return p.token[p.peekCount]
 }
 
 // backup backs the input stream up one token.
-func (t *Tree) backup() {
-	t.peekCount++
+func (p *parser) backup() {
+	p.peekCount++
 }
 
 // backup2 backs the input stream up two tokens
-func (t *Tree) backup2(t1 item) {
-	t.token[1] = t1
-	t.peekCount = 2
+func (p *parser) backup2(t1 item) {
+	p.token[1] = t1
+	p.peekCount = 2
 }
 
 // peek returns but does not consume the next token.
-func (t *Tree) peek() item {
-	if t.peekCount > 0 {
-		return t.token[t.peekCount-1]
+func (p *parser) peek() item {
+	if p.peekCount > 0 {
+		return p.token[p.peekCount-1]
 	}
-	t.peekCount = 1
-	t.token[0] = t.lex.nextItem()
-	return t.token[0]
+	p.peekCount = 1
+	p.token[0] = p.lex.nextItem()
+	return p.token[0]
 }
 
 // Parsing.
 
-// New allocates a new parse tree with the given name.
-func New(name string, funcs ...map[string]interface{}) *Tree {
-	return &Tree{
-		Name:  name,
-		funcs: funcs,
-	}
-}
-
 // errorf formats the error and terminates processing.
-func (t *Tree) errorf(format string, args ...interface{}) {
-	t.Root = nil
-	format = fmt.Sprintf("template: %s:%d: %s", t.Name, t.lex.lineNumber(), format)
+func (p *parser) errorf(format string, args ...interface{}) {
+	format = fmt.Sprintf("template: %s:%d: %s", p.name, p.lex.lineNumber(), format)
 	panic(fmt.Errorf(format, args...))
 }
 
 // error terminates processing.
-func (t *Tree) error(err error) {
-	t.errorf("%s", err)
+func (p *parser) error(err error) {
+	p.errorf("%s", err)
 }
 
 // expect consumes the next token and guarantees it has the required type.
-func (t *Tree) expect(expected itemType, context string) item {
-	token := t.next()
+func (p *parser) expect(expected itemType, context string) item {
+	token := p.next()
 	if token.typ != expected {
-		t.errorf("expected %s in %s; got %s", expected, context, token)
+		p.errorf("expected %s in %s; got %s", expected, context, token)
 	}
 	return token
 }
 
 // expectOneOf consumes the next token and guarantees it has one of the required types.
-func (t *Tree) expectOneOf(expected1, expected2 itemType, context string) item {
-	token := t.next()
+func (p *parser) expectOneOf(expected1, expected2 itemType, context string) item {
+	token := p.next()
 	if token.typ != expected1 && token.typ != expected2 {
-		t.errorf("expected %s or %s in %s; got %s", expected1, expected2, context, token)
+		p.errorf("expected %s or %s in %s; got %s", expected1, expected2, context, token)
 	}
 	return token
 }
 
 // unexpected complains about the token and terminates processing.
-func (t *Tree) unexpected(token item, context string) {
-	t.errorf("unexpected %s in %s", token, context)
+func (p *parser) unexpected(token item, context string) {
+	p.errorf("unexpected %s in %s", token, context)
 }
 
 // recover is the handler that turns panics into returns from the top level of Parse.
-func (t *Tree) recover(errp *error) {
-	e := recover()
-	if e != nil {
+func (p *parser) recover(errp *error) {
+	if e := recover(); e != nil {
 		if _, ok := e.(runtime.Error); ok {
 			panic(e)
 		}
-		if t != nil {
-			t.stopParse()
-		}
 		*errp = e.(error)
 	}
-	return
-}
-
-// startParse initializes the parser, using the lexer.
-func (t *Tree) startParse(funcs []map[string]interface{}, lex *lexer) {
-	t.Root = nil
-	t.lex = lex
-	t.vars = []string{"$"}
-	t.funcs = funcs
-}
-
-// stopParse terminates parsing.
-func (t *Tree) stopParse() {
-	t.lex = nil
-	t.vars = nil
-	t.funcs = nil
 }
 
 // atEOF returns true if, possibly after spaces, we're at EOF.
-func (t *Tree) atEOF() bool {
+func (p *parser) atEOF() bool {
 	for {
-		token := t.peek()
+		token := p.peek()
 		switch token.typ {
 		case itemEOF:
 			return true
@@ -157,7 +126,7 @@ func (t *Tree) atEOF() bool {
 					return false
 				}
 			}
-			t.next() // skip spaces.
+			p.next() // skip spaces.
 			continue
 		}
 		break
@@ -165,129 +134,79 @@ func (t *Tree) atEOF() bool {
 	return false
 }
 
-// Parse parses the template definition string to construct a representation of
-// the template for execution. If either action delimiter string is empty, the
-// default ("{{" or "}}") is used. Embedded template definitions are added to
-// the treeSet map.
-func (t *Tree) Parse(s, leftDelim, rightDelim string, treeSet map[string]*Tree, funcs ...map[string]interface{}) (tree *Tree, err error) {
-	defer t.recover(&err)
-	t.startParse(funcs, lex(t.Name, s, leftDelim, rightDelim))
-	t.parse(treeSet)
-	t.add(treeSet)
-	t.stopParse()
-	return t, nil
-}
-
 // add adds tree to the treeSet.
-func (t *Tree) add(treeSet map[string]*Tree) {
-	tree := treeSet[t.Name]
-	if tree == nil || IsEmptyTree(tree.Root) {
-		treeSet[t.Name] = t
-		return
+func (p *parser) add(name string, node *DefineNode) {
+	if _, ok := p.dst[name]; ok {
+		p.errorf("template: multiple definition of template %q", name)
 	}
-	if !IsEmptyTree(t.Root) {
-		t.errorf("template: multiple definition of template %q", t.Name)
-	}
+	p.dst[name] = node
 }
 
-// IsEmptyTree reports whether this tree (node) is empty of everything but space.
-func IsEmptyTree(n Node) bool {
-	switch n := n.(type) {
-	case nil:
-		return true
-	case *ActionNode:
-	case *IfNode:
-	case *ListNode:
-		for _, node := range n.Nodes {
-			if !IsEmptyTree(node) {
-				return false
-			}
+// parse is the top-level parser for a template: it only parses {{define}}
+// actions. It runs to EOF.
+func (p *parser) parse(name, text, leftDelim, rightDelim string) (err error) {
+	defer p.recover(&err)
+	p.lex = lex(name, text, leftDelim, rightDelim)
+	for {
+		switch p.next().typ {
+		case itemEOF:
+			return
+		case itemLeftDelim:
+			p.expect(itemDefine, "template root")
+			define := p.parseDefinition()
+			p.add(define.Name, define)
 		}
-		return true
-	case *RangeNode:
-	case *TemplateNode:
-	case *TextNode:
-		return len(bytes.TrimSpace(n.Text)) == 0
-	case *WithNode:
-	default:
-		panic("unknown node: " + n.String())
 	}
-	return false
-}
-
-// parse is the top-level parser for a template, essentially the same
-// as itemList except it also parses {{define}} actions.
-// It runs to EOF.
-func (t *Tree) parse(treeSet map[string]*Tree) (next Node) {
-	t.Root = newList()
-	for t.peek().typ != itemEOF {
-		if t.peek().typ == itemLeftDelim {
-			delim := t.next()
-			if t.next().typ == itemDefine {
-				newT := New("definition") // name will be updated once we know it.
-				newT.startParse(t.funcs, t.lex)
-				newT.parseDefinition(treeSet)
-				continue
-			}
-			t.backup2(delim)
-		}
-		n := t.textOrAction()
-		if n.Type() == nodeEnd {
-			t.errorf("unexpected %s", n)
-		}
-		t.Root.append(n)
-	}
-	return nil
+	return
 }
 
 // parseDefinition parses a {{define}} ...  {{end}} template definition and
 // installs the definition in the treeSet map.  The "define" keyword has already
 // been scanned.
-func (t *Tree) parseDefinition(treeSet map[string]*Tree) {
+func (p *parser) parseDefinition() *DefineNode {
 	const context = "define clause"
-	name := t.expectOneOf(itemString, itemRawString, context)
-	var err error
-	t.Name, err = strconv.Unquote(name.val)
+	defer p.popVars(1)
+	line := p.lex.lineNumber()
+	token := p.expectOneOf(itemString, itemRawString, context)
+	name, err := strconv.Unquote(token.val)
 	if err != nil {
-		t.error(err)
+		p.error(err)
 	}
-	t.expect(itemRightDelim, context)
-	var end Node
-	t.Root, end = t.itemList()
+	p.expect(itemRightDelim, context)
+	list, end := p.itemList()
 	if end.Type() != nodeEnd {
-		t.errorf("unexpected %s in %s", end, context)
+		p.errorf("unexpected %s in %s", end, context)
 	}
-	t.stopParse()
-	t.add(treeSet)
+	return newDefine(line, name, list)
 }
 
 // itemList:
 //	textOrAction*
 // Terminates at {{end}} or {{else}}, returned separately.
-func (t *Tree) itemList() (list *ListNode, next Node) {
+func (p *parser) itemList() (list *ListNode, next Node) {
 	list = newList()
-	for t.peek().typ != itemEOF {
-		n := t.textOrAction()
+	for p.peek().typ != itemEOF {
+		n := p.textOrAction()
 		switch n.Type() {
 		case nodeEnd, nodeElse:
 			return list, n
 		}
 		list.append(n)
 	}
-	t.errorf("unexpected EOF")
+	p.errorf("unexpected EOF")
 	return
 }
 
 // textOrAction:
 //	text | action
-func (t *Tree) textOrAction() Node {
-	switch token := t.next(); token.typ {
+func (p *parser) textOrAction() Node {
+	switch token := p.next(); token.typ {
 	case itemText:
 		return newText(token.val)
 	case itemLeftDelim:
-		return t.action()
+		return p.action()
 	default:
-		t.unexpected(token, "input")
+		p.unexpected(token, "input")
 	}
 	return nil
 }
@@ -297,90 +216,90 @@ func (t *Tree) textOrAction() Node {
 //	command ("|" command)*
 // Left delim is past. Now get actions.
 // First word could be a keyword such as range.
-func (t *Tree) action() (n Node) {
-	switch token := t.next(); token.typ {
+func (p *parser) action() (n Node) {
+	switch token := p.next(); token.typ {
 	case itemElse:
-		return t.elseControl()
+		return p.elseControl()
 	case itemEnd:
-		return t.endControl()
+		return p.endControl()
 	case itemIf:
-		return t.ifControl()
+		return p.ifControl()
 	case itemRange:
-		return t.rangeControl()
+		return p.rangeControl()
 	case itemTemplate:
-		return t.templateControl()
+		return p.templateControl()
 	case itemWith:
-		return t.withControl()
+		return p.withControl()
 	case itemBlock:
-		return t.blockControl()
+		return p.blockControl()
 	case itemFill:
-		return t.fillControl()
+		return p.fillControl()
 	}
-	t.backup()
+	p.backup()
 	// Do not pop variables; they persist until "end".
-	return newAction(t.lex.lineNumber(), t.pipeline("command"))
+	return newAction(p.lex.lineNumber(), p.pipeline("command"))
 }
 
 // Pipeline:
 //	field or command
 //	pipeline "|" pipeline
-func (t *Tree) pipeline(context string) (pipe *PipeNode) {
+func (p *parser) pipeline(context string) (pipe *PipeNode) {
 	var decl []*VariableNode
 	// Are there declarations?
 	for {
-		if v := t.peek(); v.typ == itemVariable {
-			t.next()
-			if next := t.peek(); next.typ == itemColonEquals || (next.typ == itemChar && next.val == ",") {
-				t.next()
+		if v := p.peek(); v.typ == itemVariable {
+			p.next()
+			if next := p.peek(); next.typ == itemColonEquals || (next.typ == itemChar && next.val == ",") {
+				p.next()
 				variable := newVariable(v.val)
 				if len(variable.Ident) != 1 {
-					t.errorf("illegal variable in declaration: %s", v.val)
+					p.errorf("illegal variable in declaration: %s", v.val)
 				}
 				decl = append(decl, variable)
-				t.vars = append(t.vars, v.val)
+				p.vars = append(p.vars, v.val)
 				if next.typ == itemChar && next.val == "," {
 					if context == "range" && len(decl) < 2 {
 						continue
 					}
-					t.errorf("too many declarations in %s", context)
+					p.errorf("too many declarations in %s", context)
 				}
 			} else {
-				t.backup2(v)
+				p.backup2(v)
 			}
 		}
 		break
 	}
-	pipe = newPipeline(t.lex.lineNumber(), decl)
+	pipe = newPipeline(p.lex.lineNumber(), decl)
 	for {
-		switch token := t.next(); token.typ {
+		switch token := p.next(); token.typ {
 		case itemRightDelim:
 			if len(pipe.Cmds) == 0 {
-				t.errorf("missing value for %s", context)
+				p.errorf("missing value for %s", context)
 			}
 			return
 		case itemBool, itemCharConstant, itemComplex, itemDot, itemField, itemIdentifier,
 			itemNumber, itemNil, itemRawString, itemString, itemVariable:
-			t.backup()
-			pipe.append(t.command())
+			p.backup()
+			pipe.append(p.command())
 		default:
-			t.unexpected(token, context)
+			p.unexpected(token, context)
 		}
 	}
 	return
 }
 
-func (t *Tree) parseControl(context string) (lineNum int, pipe *PipeNode, list, elseList *ListNode) {
-	lineNum = t.lex.lineNumber()
-	defer t.popVars(len(t.vars))
-	pipe = t.pipeline(context)
+func (p *parser) parseControl(context string) (lineNum int, pipe *PipeNode, list, elseList *ListNode) {
+	lineNum = p.lex.lineNumber()
+	defer p.popVars(len(p.vars))
+	pipe = p.pipeline(context)
 	var next Node
-	list, next = t.itemList()
+	list, next = p.itemList()
 	switch next.Type() {
 	case nodeEnd: //done
 	case nodeElse:
-		elseList, next = t.itemList()
+		elseList, next = p.itemList()
 		if next.Type() != nodeEnd {
-			t.errorf("expected end; found %s", next)
+			p.errorf("expected end; found %s", next)
 		}
 		elseList = elseList
 	}
@@ -391,98 +310,98 @@ func (t *Tree) parseControl(context string) (lineNum int, pipe *PipeNode, list, 
 //	{{if pipeline}} itemList {{end}}
 //	{{if pipeline}} itemList {{else}} itemList {{end}}
 // If keyword is past.
-func (t *Tree) ifControl() Node {
-	return newIf(t.parseControl("if"))
+func (p *parser) ifControl() Node {
+	return newIf(p.parseControl("if"))
 }
 
 // Range:
 //	{{range pipeline}} itemList {{end}}
 //	{{range pipeline}} itemList {{else}} itemList {{end}}
 // Range keyword is past.
-func (t *Tree) rangeControl() Node {
-	return newRange(t.parseControl("range"))
+func (p *parser) rangeControl() Node {
+	return newRange(p.parseControl("range"))
 }
 
 // With:
 //	{{with pipeline}} itemList {{end}}
 //	{{with pipeline}} itemList {{else}} itemList {{end}}
 // If keyword is past.
-func (t *Tree) withControl() Node {
-	return newWith(t.parseControl("with"))
+func (p *parser) withControl() Node {
+	return newWith(p.parseControl("with"))
 }
 
 // End:
 //	{{end}}
 // End keyword is past.
-func (t *Tree) endControl() Node {
-	t.expect(itemRightDelim, "end")
+func (p *parser) endControl() Node {
+	p.expect(itemRightDelim, "end")
 	return newEnd()
 }
 
 // Else:
 //	{{else}}
 // Else keyword is past.
-func (t *Tree) elseControl() Node {
-	t.expect(itemRightDelim, "else")
-	return newElse(t.lex.lineNumber())
+func (p *parser) elseControl() Node {
+	p.expect(itemRightDelim, "else")
+	return newElse(p.lex.lineNumber())
 }
 
 // Template:
 //	{{template stringValue pipeline}}
 // Template keyword is past.  The name must be something that can evaluate
 // to a string.
-func (t *Tree) templateControl() Node {
+func (p *parser) templateControl() Node {
 	var name string
-	switch token := t.next(); token.typ {
+	switch token := p.next(); token.typ {
 	case itemString, itemRawString:
 		s, err := strconv.Unquote(token.val)
 		if err != nil {
-			t.error(err)
+			p.error(err)
 		}
 		name = s
 	default:
-		t.unexpected(token, "template invocation")
+		p.unexpected(token, "template invocation")
 	}
 	var pipe *PipeNode
-	if t.next().typ != itemRightDelim {
-		t.backup()
+	if p.next().typ != itemRightDelim {
+		p.backup()
 		// Do not pop variables; they persist until "end".
-		pipe = t.pipeline("template")
+		pipe = p.pipeline("template")
 	}
-	return newTemplate(t.lex.lineNumber(), name, pipe)
+	return newTemplate(p.lex.lineNumber(), name, pipe)
 }
 
 // Block:
 //	{{block stringValue pipeline}} itemList {{end}}
 // Block keyword is past.
-func (t *Tree) blockControl() Node {
-	return newBlock(t.blockOrFill("block"))
+func (p *parser) blockControl() Node {
+	return newBlock(p.blockOrFill("block"))
 }
 
 // Fill:
 //	{{fill stringValue pipeline}} itemList {{end}}
 // Fill keyword is past.
-func (t *Tree) fillControl() Node {
-	n := newFill(t.blockOrFill("fill"))
+func (p *parser) fillControl() Node {
+	n := newFill(p.blockOrFill("fill"))
 	n.validate(n.List)
 	return n
 }
 
 // blockOrFillControl parses a {{block}} or {{fill}}.
-func (t *Tree) blockOrFill(context string) (lineNum int, name string, pipe *PipeNode, list *ListNode) {
-	lineNum = t.lex.lineNumber()
-	token := t.expectOneOf(itemString, itemRawString, context)
+func (p *parser) blockOrFill(context string) (lineNum int, name string, pipe *PipeNode, list *ListNode) {
+	lineNum = p.lex.lineNumber()
+	token := p.expectOneOf(itemString, itemRawString, context)
 	name, err := strconv.Unquote(token.val)
 	if err != nil {
-		t.error(err)
+		p.error(err)
 	}
-	if t.next().typ != itemRightDelim {
-		t.backup()
-		pipe = t.pipeline(context)
+	if p.next().typ != itemRightDelim {
+		p.backup()
+		pipe = p.pipeline(context)
 	}
-	list, end := t.itemList()
+	list, end := p.itemList()
 	if end.Type() != nodeEnd {
-		t.errorf("expected <end> in %s", context)
+		p.errorf("expected <end> in %s", context)
 	}
 	return lineNum, name, pipe, list
 }
@@ -490,21 +409,21 @@ func (t *Tree) blockOrFill(context string) (lineNum int, name string, pipe *Pipe
 // command:
 // space-separated arguments up to a pipeline character or right delimiter.
 // we consume the pipe character but leave the right delim to terminate the action.
-func (t *Tree) command() *CommandNode {
+func (p *parser) command() *CommandNode {
 	cmd := newCommand()
 Loop:
 	for {
-		switch token := t.next(); token.typ {
+		switch token := p.next(); token.typ {
 		case itemRightDelim:
-			t.backup()
+			p.backup()
 			break Loop
 		case itemPipe:
 			break Loop
 		case itemError:
-			t.errorf("%s", token.val)
+			p.errorf("%s", token.val)
 		case itemIdentifier:
-			if !t.hasFunction(token.val) {
-				t.errorf("function %q not defined", token.val)
+			if !p.hasFunction(token.val) {
+				p.errorf("function %q not defined", token.val)
 			}
 			cmd.append(NewIdentifier(token.val))
 		case itemDot:
@@ -512,7 +431,7 @@ Loop:
 		case itemNil:
 			cmd.append(newNil())
 		case itemVariable:
-			cmd.append(t.useVar(token.val))
+			cmd.append(p.useVar(token.val))
 		case itemField:
 			cmd.append(newField(token.val))
 		case itemBool:
@@ -520,28 +439,28 @@ Loop:
 		case itemCharConstant, itemComplex, itemNumber:
 			number, err := newNumber(token.val, token.typ)
 			if err != nil {
-				t.error(err)
+				p.error(err)
 			}
 			cmd.append(number)
 		case itemString, itemRawString:
 			s, err := strconv.Unquote(token.val)
 			if err != nil {
-				t.error(err)
+				p.error(err)
 			}
 			cmd.append(newString(token.val, s))
 		default:
-			t.unexpected(token, "command")
+			p.unexpected(token, "command")
 		}
 	}
 	if len(cmd.Args) == 0 {
-		t.errorf("empty command")
+		p.errorf("empty command")
 	}
 	return cmd
 }
 
 // hasFunction reports if a function name exists in the Tree's maps.
-func (t *Tree) hasFunction(name string) bool {
-	for _, funcMap := range t.funcs {
+func (p *parser) hasFunction(name string) bool {
+	for _, funcMap := range p.funcs {
 		if funcMap == nil {
 			continue
 		}
@@ -553,19 +472,19 @@ func (t *Tree) hasFunction(name string) bool {
 }
 
 // popVars trims the variable list to the specified length
-func (t *Tree) popVars(n int) {
-	t.vars = t.vars[:n]
+func (p *parser) popVars(n int) {
+	p.vars = p.vars[:n]
 }
 
 // useVar returns a node for a variable reference. It errors if the
 // variable is not defined.
-func (t *Tree) useVar(name string) Node {
+func (p *parser) useVar(name string) Node {
 	v := newVariable(name)
-	for _, varName := range t.vars {
+	for _, varName := range p.vars {
 		if varName == v.Ident[0] {
 			return v
 		}
 	}
-	t.errorf("undefined variable %q", v.Ident[0])
+	p.errorf("undefined variable %q", v.Ident[0])
 	return nil
 }

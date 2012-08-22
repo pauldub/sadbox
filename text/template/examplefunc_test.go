@@ -28,21 +28,21 @@ func ExampleTemplate_func() {
 	// - title-cased
 	// - title-cased and then printed with %q
 	// - printed with %q and then title-cased.
-	const templateText = `
+	const templateText = `{{define "funcs"}}
 Input: {{printf "%q" .}}
 Output 0: {{title .}}
 Output 1: {{title . | printf "%q"}}
 Output 2: {{printf "%q" . | title}}
-`
+{{end}}`
 
 	// Create a template, add the function map, and parse the text.
-	tmpl, err := template.New("titleTest").Funcs(funcMap).Parse(templateText)
+	tmpl, err := new(template.Set).Funcs(funcMap).Parse(templateText)
 	if err != nil {
 		log.Fatalf("parsing: %s", err)
 	}
 
 	// Run the template to verify the output.
-	err = tmpl.Execute(os.Stdout, "the go programming language")
+	err = tmpl.Execute(os.Stdout, "funcs", "the go programming language")
 	if err != nil {
 		log.Fatalf("execution: %s", err)
 	}

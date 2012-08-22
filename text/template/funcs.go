@@ -81,8 +81,8 @@ func goodFunc(typ reflect.Type) bool {
 }
 
 // findFunction looks for a function in the template, and global map.
-func findFunction(name string, tmpl *Template) (reflect.Value, bool) {
-	if tmpl != nil && tmpl.common != nil {
+func findFunction(name string, tmpl *Set) (reflect.Value, bool) {
+	if tmpl != nil && tmpl.execFuncs != nil {
 		if fn := tmpl.execFuncs[name]; fn.IsValid() {
 			return fn, true
 		}

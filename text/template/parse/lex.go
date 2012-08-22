@@ -207,9 +207,11 @@ func (l *lexer) errorf(format string, args ...interface{}) stateFn {
 
 // nextItem returns the next item from the input.
 func (l *lexer) nextItem() item {
-	item := <-l.items
-	l.lastPos = item.pos
-	return item
+	if item, ok := <-l.items; ok {
+		l.lastPos = item.pos
+		return item
+	}
+	return item{itemEOF, l.pos, ""}
 }
 
 // lex creates a new scanner for the input string.
@@ -236,6 +238,7 @@ func (l *lexer) run() {
 	for l.state = lexText; l.state != nil; {
 		l.state = l.state(l)
 	}
+	close(l.items)
 }
 
 // state functions

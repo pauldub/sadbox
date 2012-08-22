@@ -14,6 +14,7 @@ import (
 func ExampleTemplate() {
 	// Define a template.
 	const letter = `
+{{define "letter"}}
 Dear {{.Name}},
 {{if .Attended}}
 It was a pleasure to see you at the wedding.{{else}}
@@ -22,6 +23,7 @@ It is a shame you couldn't make it to the wedding.{{end}}
 {{end}}
 Best wishes,
 Josie
+{{end}}
 `
 
 	// Prepare some data to insert into the template.
@@ -36,11 +38,11 @@ Josie
 	}
 
 	// Create a new template and parse the letter into it.
-	t := template.Must(template.New("letter").Parse(letter))
+	t := template.Must(template.Parse(letter))
 
 	// Execute the template for each recipient.
 	for _, r := range recipients {
-		err := t.Execute(os.Stdout, r)
+		err := t.Execute(os.Stdout, "letter", r)
 		if err != nil {
 			log.Println("executing template:", err)
 		}

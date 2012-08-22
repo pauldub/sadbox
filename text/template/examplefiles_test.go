@@ -46,7 +46,7 @@ func ExampleTemplate_glob() {
 	// exist in some location known to the program.
 	dir := createTestDir([]templateFile{
 		// T0.tmpl is a plain template file that just invokes T1.
-		{"T0.tmpl", `T0 invokes T1: ({{template "T1"}})`},
+		{"T0.tmpl", `{{define "T0"}}T0 invokes T1: ({{template "T1"}}){{end}}`},
 		// T1.tmpl defines a template, T1 that invokes T2.
 		{"T1.tmpl", `{{define "T1"}}T1 invokes T2: ({{template "T2"}}){{end}}`},
 		// T2.tmpl defines a template T2.
@@ -63,7 +63,7 @@ func ExampleTemplate_glob() {
 	// the value returned by ParseGlob.
 	tmpl := template.Must(template.ParseGlob(pattern))
 
-	err := tmpl.Execute(os.Stdout, nil)
+	err := tmpl.Execute(os.Stdout, "T0", nil)
 	if err != nil {
 		log.Fatalf("template execution: %s", err)
 	}
@@ -94,22 +94,22 @@ func ExampleTemplate_helpers() {
 	// Load the helpers.
 	templates := template.Must(template.ParseGlob(pattern))
 	// Add one driver template to the bunch; we do this with an explicit template definition.
-	_, err := templates.Parse("{{define `driver1`}}Driver 1 calls T1: ({{template `T1`}})\n{{end}}")
+	templates, err := templates.Parse("{{define `driver1`}}Driver 1 calls T1: ({{template `T1`}})\n{{end}}")
 	if err != nil {
 		log.Fatal("parsing driver1: ", err)
 	}
 	// Add another driver template.
-	_, err = templates.Parse("{{define `driver2`}}Driver 2 calls T2: ({{template `T2`}})\n{{end}}")
+	templates, err = templates.Parse("{{define `driver2`}}Driver 2 calls T2: ({{template `T2`}})\n{{end}}")
 	if err != nil {
 		log.Fatal("parsing driver2: ", err)
 	}
 	// We load all the templates before execution. This package does not require
 	// that behavior but html/template's escaping does, so it's a good habit.
-	err = templates.ExecuteTemplate(os.Stdout, "driver1", nil)
+	err = templates.Execute(os.Stdout, "driver1", nil)
 	if err != nil {
 		log.Fatalf("driver1 execution: %s", err)
 	}
-	err = templates.ExecuteTemplate(os.Stdout, "driver2", nil)
+	err = templates.Execute(os.Stdout, "driver2", nil)
 	if err != nil {
 		log.Fatalf("driver2 execution: %s", err)
 	}
@@ -126,7 +126,7 @@ func ExampleTemplate_share() {
 	// exist in some location known to the program.
 	dir := createTestDir([]templateFile{
 		// T0.tmpl is a plain template file that just invokes T1.
-		{"T0.tmpl", "T0 ({{.}} version) invokes T1: ({{template `T1`}})\n"},
+		{"T0.tmpl", `{{define "T0"}}T0 ({{.}} version) invokes T1: ({{template "T1"}})`+ "\n{{end}}"},
 		// T1.tmpl defines a template, T1 that invokes T2. Note T2 is not defined
 		{"T1.tmpl", `{{define "T1"}}T1 invokes T2: ({{template "T2"}}){{end}}`},
 	})
@@ -144,35 +144,29 @@ func ExampleTemplate_share() {
 	// the drivers, then add a definition of T2 to the template name space.
 
 	// 1. Clone the helper set to create a new name space from which to run them.
-	first, err := drivers.Clone()
-	if err != nil {
-		log.Fatal("cloning helpers: ", err)
-	}
+	first := drivers.Clone()
 	// 2. Define T2, version A, and parse it.
-	_, err = first.Parse("{{define `T2`}}T2, version A{{end}}")
+	first, err := first.Parse("{{define `T2`}}T2, version A{{end}}")
 	if err != nil {
 		log.Fatal("parsing T2: ", err)
 	}
 
 	// Now repeat the whole thing, using a different version of T2.
 	// 1. Clone the drivers.
-	second, err := drivers.Clone()
-	if err != nil {
-		log.Fatal("cloning drivers: ", err)
-	}
+	second := drivers.Clone()
 	// 2. Define T2, version B, and parse it.
-	_, err = second.Parse("{{define `T2`}}T2, version B{{end}}")
+	second, err = second.Parse("{{define `T2`}}T2, version B{{end}}")
 	if err != nil {
 		log.Fatal("parsing T2: ", err)
 	}
 
 	// Execute the templates in the reverse order to verify the
 	// first is unaffected by the second.
-	err = second.ExecuteTemplate(os.Stdout, "T0.tmpl", "second")
+	err = second.Execute(os.Stdout, "T0", "second")
 	if err != nil {
 		log.Fatalf("second execution: %s", err)
 	}
-	err = first.ExecuteTemplate(os.Stdout, "T0.tmpl", "first")
+	err = first.Execute(os.Stdout, "T0", "first")
 	if err != nil {
 		log.Fatalf("first: execution: %s", err)
 	}

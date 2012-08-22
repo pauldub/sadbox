@@ -19,7 +19,7 @@ import (
 // template so that multiple executions of the same template
 // can execute in parallel.
 type state struct {
-	tmpl    *Template
+	set     *Set
 	wr      io.Writer
 	line    int               // line number for errors
 	vars    []variable        // push-down stack of variable values
@@ -84,7 +84,7 @@ var zero reflect.Value
 
 // errorf formats the error and terminates processing.
 func (s *state) errorf(format string, args ...interface{}) {
-	format = fmt.Sprintf("template: %s:%d: %s", s.tmpl.Name(), s.line, format)
+	format = fmt.Sprintf("template: %d: %s", s.line, format)
 	panic(fmt.Errorf(format, args...))
 }
 
@@ -109,31 +109,25 @@ func errRecover(errp *error) {
 	}
 }
 
-// ExecuteTemplate applies the template associated with t that has the given name
+// ExecuteTemplate applies the template with the given name
 // to the specified data object and writes the output to wr.
-func (t *Template) ExecuteTemplate(wr io.Writer, name string, data interface{}) error {
-	tmpl := t.tmpl[name]
+func (s *Set) Execute(wr io.Writer, name string, data interface{}) (err error) {
+	tmpl := s.tmpl[name]
 	if tmpl == nil {
-		return fmt.Errorf("template: no template %q associated with template %q", name, t.name)
+		return fmt.Errorf("template: template %q not defined", name)
 	}
-	return tmpl.Execute(wr, data)
-}
-
-// Execute applies a parsed template to the specified data object,
-// and writes the output to wr.
-func (t *Template) Execute(wr io.Writer, data interface{}) (err error) {
 	defer errRecover(&err)
 	value := reflect.ValueOf(data)
 	state := &state{
-		tmpl: t,
+		set:  s,
 		wr:   wr,
 		line: 1,
 		vars: []variable{{"$", value}},
 	}
-	if t.Tree == nil || t.Root == nil {
-		state.errorf("%q is an incomplete or empty template", t.name)
+	if tmpl.List == nil {
+		state.errorf("%q is an incomplete or empty template", name)
 	}
-	state.walk(value, t.Root)
+	state.walk(value, tmpl.List)
 	return
 }
 
@@ -291,19 +285,19 @@ func (s *state) walkRange(dot reflect.Value, r *parse.RangeNode) {
 }
 
 func (s *state) walkTemplate(dot reflect.Value, t *parse.TemplateNode) {
-	tmpl := s.tmpl.tmpl[t.Name]
+	tmpl := s.set.tmpl[t.Name]
 	if tmpl == nil {
 		s.errorf("template %q not defined", t.Name)
 	}
 	// Variables declared by the pipeline persist.
 	dot = s.evalPipeline(dot, t.Pipe)
 	newState := *s
-	newState.tmpl = tmpl
+	newState.set = s.set
 	newState.fillers = nil
 	newState.filling = false
 	// No dynamic scoping: template invocations inherit no variables.
 	newState.vars = []variable{{"$", dot}}
-	newState.walk(dot, tmpl.Root)
+	newState.walk(dot, tmpl.List)
 }
 
 // walkBlock walks a 'block' node.
@@ -326,21 +320,21 @@ func (s *state) walkBlock(dot reflect.Value, b *parse.BlockNode) {
 // walkFill walks a 'fill' node. It is essentially the same as walkTemplate
 // but it also sets block fillers.
 func (s *state) walkFill(dot reflect.Value, f *parse.FillNode) {
-	tmpl := s.tmpl.tmpl[f.Name]
+	tmpl := s.set.tmpl[f.Name]
 	if tmpl == nil {
 		s.errorf("template %q not defined", f.Name)
 	}
 	// Variables declared by the pipeline persist.
 	dot = s.evalPipeline(dot, f.Pipe)
 	newState := *s
-	newState.tmpl = tmpl
+	newState.set = s.set
 	newState.fillers = nil
 	newState.filling = true
 	newState.walk(dot, f.List)
 	newState.filling = false
 	// No dynamic scoping: template invocations inherit no variables.
 	newState.vars = []variable{{"$", dot}}
-	newState.walk(dot, tmpl.Root)
+	newState.walk(dot, tmpl.List)
 }
 
 // Eval functions evaluate pipelines, commands, and their elements and extract
@@ -454,7 +448,7 @@ func (s *state) evalFieldChain(dot, receiver reflect.Value, ident []string, args
 }
 
 func (s *state) evalFunction(dot reflect.Value, name string, args []parse.Node, final reflect.Value) reflect.Value {
-	function, ok := findFunction(name, s.tmpl)
+	function, ok := findFunction(name, s.set)
 	if !ok {
 		s.errorf("%q is not a defined function", name)
 	}

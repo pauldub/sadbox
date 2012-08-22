@@ -35,12 +35,15 @@ func (t NodeType) Type() NodeType {
 const (
 	NodeText       NodeType = iota // Plain text.
 	NodeAction                     // A simple action such as field evaluation.
+	NodeBlock                      // A block action.
 	NodeBool                       // A boolean constant.
 	NodeCommand                    // An element of a pipeline.
+	NodeDefine                     // A template definition.
 	NodeDot                        // The cursor, dot.
 	nodeElse                       // An else action. Not added to tree.
 	nodeEnd                        // An end action. Not added to tree.
 	NodeField                      // A field or method name.
+	NodeFill                       // A fill action.
 	NodeIdentifier                 // An identifier; always a function name.
 	NodeIf                         // An if action.
 	NodeList                       // A list of Nodes.
@@ -49,9 +52,7 @@ const (
 	NodePipe                       // A pipeline of commands.
 	NodeRange                      // A range action.
 	NodeString                     // A string constant.
-	NodeTemplate                   // A template invocation action.
-	NodeBlock                      // A block action.
-	NodeFill                       // A fill action.
+	NodeTemplate                   // A template inv
 	NodeVariable                   // A $ variable.
 	NodeWith                       // A with action.
 )
@@ -706,4 +707,24 @@ func (f *FillNode) isValid(n Node) bool {
 		return false
 	}
 	return true
+}
+
+// DefineNode represents a {{define}} action.
+type DefineNode struct {
+	NodeType
+	Line int       // The line number in the input.
+	Name string    // The name of the template (unquoted).
+	List *ListNode // Contents of the template.
+}
+
+func newDefine(line int, name string, list *ListNode) *DefineNode {
+	return &DefineNode{NodeType: NodeDefine, Line: line, Name: name, List: list}
+}
+
+func (d *DefineNode) String() string {
+	return fmt.Sprintf("{{define %q}}%s{{end}}", d.Name, d.List)
+}
+
+func (d *DefineNode) Copy() Node {
+	return newDefine(d.Line, d.Name, d.List.CopyList())
 }

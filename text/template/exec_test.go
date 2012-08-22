@@ -65,7 +65,7 @@ type T struct {
 	VariadicFuncInt func(int, ...string) string
 	NilOKFunc       func(*int) bool
 	// Template to test evaluation of templates.
-	Tmpl *Template
+	Tmpl *Set
 	// Unexported field; cannot be accessed by template.
 	unexported int
 }
@@ -129,7 +129,7 @@ var tVal = &T{
 	VariadicFunc:      func(s ...string) string { return fmt.Sprint("<", strings.Join(s, "+"), ">") },
 	VariadicFuncInt:   func(a int, s ...string) string { return fmt.Sprint(a, "=<", strings.Join(s, "+"), ">") },
 	NilOKFunc:         func(s *int) bool { return s == nil },
-	Tmpl:              Must(New("x").Parse("test template")), // "x" is the value of .X
+	Tmpl:              Must(Parse("test template")), // "x" is the value of .X
 }
 
 // A non-empty interface.
@@ -528,7 +528,7 @@ func stringer(s fmt.Stringer) string {
 	return s.String()
 }
 
-func testExecute(execTests []execTest, template *Template, t *testing.T) {
+func testExecute(execTests []execTest, template *Set, t *testing.T, wrap bool) {
 	b := new(bytes.Buffer)
 	funcs := FuncMap{
 		"count":    count,
@@ -540,19 +540,23 @@ func testExecute(execTests []execTest, template *Template, t *testing.T) {
 		"stringer": stringer,
 	}
 	for _, test := range execTests {
-		var tmpl *Template
+		var tmpl *Set
 		var err error
+		input := test.input
+		if wrap {
+			input = fmt.Sprintf(`{{define "foo"}}%s{{end}}`, test.input)
+		}
 		if template == nil {
-			tmpl, err = New(test.name).Funcs(funcs).Parse(test.input)
+			tmpl, err = new(Set).Funcs(funcs).ParseNamed(input, test.name)
 		} else {
-			tmpl, err = template.New(test.name).Funcs(funcs).Parse(test.input)
+			tmpl, err = template.Funcs(funcs).ParseNamed(input, test.name)
 		}
 		if err != nil {
 			t.Errorf("%s: parse error: %s", test.name, err)
 			continue
 		}
 		b.Reset()
-		err = tmpl.Execute(b, test.data)
+		err = tmpl.Execute(b, "foo", test.data)
 		switch {
 		case !test.ok && err == nil:
 			t.Errorf("%s: expected error; got none", test.name)
@@ -563,7 +567,7 @@ func testExecute(execTests []execTest, template *Template, t *testing.T) {
 		case !test.ok && err != nil:
 			// expected error, got one
 			if *debug {
-				fmt.Printf("%s: %s\n\t%s\n", test.name, test.input, err)
+				fmt.Printf("%s: %s\n\t%s\n", test.name, input, err)
 			}
 		}
 		result := b.String()
@@ -574,7 +578,7 @@ func testExecute(execTests []execTest, template *Template, t *testing.T) {
 }
 
 func TestExecute(t *testing.T) {
-	testExecute(execTests, nil, t)
+	testExecute(execTests, nil, t, true)
 }
 
 var delimPairs = []string{
@@ -589,8 +593,7 @@ func TestDelims(t *testing.T) {
 	const hello = "Hello, world"
 	var value = struct{ Str string }{hello}
 	for i := 0; i < len(delimPairs); i += 2 {
-		text := ".Str"
-		left := delimPairs[i+0]
+		left := delimPairs[i]
 		trueLeft := left
 		right := delimPairs[i+1]
 		trueRight := right
@@ -600,18 +603,23 @@ func TestDelims(t *testing.T) {
 		if right == "" { // default case
 			trueRight = "}}"
 		}
-		text = trueLeft + text + trueRight
+		// Set the define action
+		text := fmt.Sprintf(`%sdefine "foo"%s`, trueLeft, trueRight)
+		// Now add the text
+		text += trueLeft + ".Str" + trueRight
 		// Now add a comment
 		text += trueLeft + "/*comment*/" + trueRight
 		// Now add  an action containing a string.
 		text += trueLeft + `"` + trueLeft + `"` + trueRight
-		// At this point text looks like `{{.Str}}{{/*comment*/}}{{"{{"}}`.
-		tmpl, err := New("delims").Delims(left, right).Parse(text)
+		// Now add end action
+		text += trueLeft + "end" + trueRight
+		// At this point text looks like `{{define "foo"}}{{.Str}}{{/*comment*/}}{{"{{"}}{{end}}`.
+		set, err := new(Set).Delims(left, right).Parse(text)
 		if err != nil {
 			t.Fatalf("delim %q text %q parse err %s", left, text, err)
 		}
 		var b = new(bytes.Buffer)
-		err = tmpl.Execute(b, value)
+		err = set.Execute(b, "foo", value)
 		if err != nil {
 			t.Fatalf("delim %q exec err %s", left, err)
 		}
@@ -624,12 +632,11 @@ func TestDelims(t *testing.T) {
 // Check that an error from a method flows back to the top.
 func TestExecuteError(t *testing.T) {
 	b := new(bytes.Buffer)
-	tmpl := New("error")
-	_, err := tmpl.Parse("{{.MyError true}}")
+	tmpl, err := new(Set).Parse(`{{define "foo"}}{{.MyError true}}{{end}}`)
 	if err != nil {
 		t.Fatalf("parse error: %s", err)
 	}
-	err = tmpl.Execute(b, tVal)
+	err = tmpl.Execute(b, "foo", tVal)
 	if err == nil {
 		t.Errorf("expected error; got none")
 	} else if !strings.Contains(err.Error(), myError.Error()) {
@@ -718,7 +725,7 @@ func TestTree(t *testing.T) {
 			},
 		},
 	}
-	tmpl, err := New("root").Delims("(", ")").Parse(treeTemplate)
+	tmpl, err := new(Set).Delims("(", ")").Parse(treeTemplate)
 	if err != nil {
 		t.Fatal("parse error:", err)
 	}
@@ -730,22 +737,13 @@ func TestTree(t *testing.T) {
 		return r
 	}
 	const expect = "[1[2[3[4]][5[6]]][7[8[9]][10[11]]]]"
-	// First by looking up the template.
-	err = tmpl.Lookup("tree").Execute(&b, tree)
+	// Then direct to execution.
+	b.Reset()
+	err = tmpl.Execute(&b, "tree", tree)
 	if err != nil {
 		t.Fatal("exec error:", err)
 	}
 	result := strings.Map(stripSpace, b.String())
-	if result != expect {
-		t.Errorf("expected %q got %q", expect, result)
-	}
-	// Then direct to execution.
-	b.Reset()
-	err = tmpl.ExecuteTemplate(&b, "tree", tree)
-	if err != nil {
-		t.Fatal("exec error:", err)
-	}
-	result = strings.Map(stripSpace, b.String())
 	if result != expect {
 		t.Errorf("expected %q got %q", expect, result)
 	}

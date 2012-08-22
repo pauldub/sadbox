@@ -79,7 +79,7 @@ func TestExecBlock(t *testing.T) {
 		{"FooBarBaz", "", "", "FooBarBaz", nil},
 	}
 
-	tmpl, err := New("root").Parse(source)
+	set, err := Parse(source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestExecBlock(t *testing.T) {
 	b := new(bytes.Buffer)
 	for _, v := range tests {
 		b.Reset()
-		if err = tmpl.ExecuteTemplate(b, v.name, v.data); err != nil {
+		if err = set.Execute(b, v.name, v.data); err != nil {
 			t.Fatal(err)
 		}
 		s := strings.TrimSpace(b.String())
