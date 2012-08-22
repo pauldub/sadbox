@@ -14,6 +14,21 @@ import (
 )
 
 // Set stores a collection of parsed templates.
+//
+// To add a template to the set call set.Parse (or other Parse* methods):
+//
+//     set, err := new(template.Set).Parse("{{define "hello"}}Hello, World!{{end}}")
+//     if err != nil {
+//         // do something with the parsing error...
+//     }
+//
+// To execute a template call set.Execute passing an io.Writer, the name of
+// the template to execute, and related data:
+//
+//     err = set.Execute(os.Stderr, "hello", nil)
+//     if err != nil {
+//         // do something with the execution error...
+//     }
 type Set struct {
 	tmpl       map[string]*parse.DefineNode
 	leftDelim  string
