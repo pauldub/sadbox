@@ -5,11 +5,15 @@
 package template
 
 import (
+	"fmt"
+	"io/ioutil"
+	"path/filepath"
 	"reflect"
 
 	"code.google.com/p/sadbox/template/parse"
 )
 
+// Set stores a collection of parsed templates.
 type Set struct {
 	tmpl       map[string]*parse.DefineNode
 	leftDelim  string
@@ -33,18 +37,18 @@ func (s *Set) init() {
 	}
 }
 
-func (s *Set) Reset() {
-	s.tmpl = nil
-	s.leftDelim = ""
-	s.rightDelim = ""
-	s.parseFuncs = nil
-	s.execFuncs = nil
-}
+//func (s *Set) Reset() {
+//	s.tmpl = nil
+//	s.leftDelim = ""
+//	s.rightDelim = ""
+//	s.parseFuncs = nil
+//	s.execFuncs = nil
+//}
 
 // Delims sets the action delimiters to the specified strings, to be used in
 // subsequent calls to Parse. An empty delimiter stands for the corresponding
 // default: "{{" or "}}".
-// The return value is the template, so calls can be chained.
+// The return value is the set, so calls can be chained.
 func (s *Set) Delims(left, right string) *Set {
 	s.leftDelim = left
 	s.rightDelim = right
@@ -54,7 +58,7 @@ func (s *Set) Delims(left, right string) *Set {
 // Funcs adds the elements of the argument map to the template's function map.
 // It panics if a value in the map is not a function with appropriate return
 // type. However, it is legal to overwrite elements of the map. The return
-// value is the template, so calls can be chained.
+// value is the set, so calls can be chained.
 func (s *Set) Funcs(funcMap FuncMap) *Set {
 	s.init()
 	addValueFuncs(s.execFuncs, funcMap)
@@ -81,4 +85,111 @@ func (s *Set) Clone() *Set {
 		ns.execFuncs[k] = v
 	}
 	return ns
+}
+
+// Functions and methods to parse templates -----------------------------------
+
+// Must is a helper that wraps a call to a function returning (*Set, error)
+// and panics if the error is non-nil. It is intended for use in variable
+// initializations such as
+//	var set = template.Must(template.Parse("text"))
+func Must(s *Set, err error) *Set {
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
+// Parse creates a new Set with the template definitions from the given text.
+// If an error occurs, parsing stops and the returned set is nil.
+func Parse(text string) (*Set, error) {
+	s, err := new(Set).Parse(text)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// Parse parses the given text and adds the resulting templates to the set.
+// If an error occurs, parsing stops and the returned set is nil; otherwise
+// it is s.
+func (s *Set) Parse(text string) (*Set, error) {
+	return s.ParseNamed(text, "source")
+}
+
+// ParseNamed is the same as Parse, but defines a name for debugging purposes.
+// Useful to parse multiple files, for example, to know which one caused an
+// error.
+func (s *Set) ParseNamed(text, name string) (*Set, error) {
+	s.init()
+	// Maybe instead of passing s.tmpl we should create a new map, and only
+	// add the parsed templates if no error occurred?
+	err := parse.Parse(s.tmpl, name, text, s.leftDelim, s.rightDelim, builtins, s.parseFuncs)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// ParseFiles creates a new Set with the template definitions from the named
+// files. There must be at least one file. If an error occurs, parsing stops
+// and the returned set is nil.
+func ParseFiles(filenames ...string) (*Set, error) {
+	return parseFiles(new(Set), filenames...)
+}
+
+// ParseFiles parses the named files and adds the resulting templates to the
+// set. There must be at least one file. If an error occurs, parsing stops and
+// the returned set is nil; otherwise it is s.
+func (s *Set) ParseFiles(filenames ...string) (*Set, error) {
+	return parseFiles(s, filenames...)
+}
+
+// parseFiles is the helper for the method and function.
+func parseFiles(s *Set, filenames ...string) (*Set, error) {
+	if len(filenames) == 0 {
+		// Not really a problem, but be consistent.
+		return nil, fmt.Errorf("template: no files named in call to ParseFiles")
+	}
+	for _, filename := range filenames {
+		b, err := ioutil.ReadFile(filename)
+		if err != nil {
+			return nil, err
+		}
+		if _, err = s.ParseNamed(string(b), filename); err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
+}
+
+// ParseGlob creates a new Set with the template definitions from the
+// files identified by the pattern. The pattern is processed by filepath.Glob
+// and must match at least one file. ParseGlob is equivalent to calling
+// ParseFiles with the list of files matched by the pattern. If an error
+// occurs, parsing stops and the returned set is nil.
+func ParseGlob(pattern string) (*Set, error) {
+	return parseGlob(new(Set), pattern)
+}
+
+// ParseGlob parses the template definitions in the files identified by the
+// pattern and adds the resulting templates to the set. The pattern is
+// processed by filepath.Glob and must match at least one file. ParseGlob is
+// equivalent to calling s.ParseFiles with the list of files matched by the
+// pattern. If an error occurs, parsing stops and the returned set is nil;
+// otherwise it is s.
+func (s *Set) ParseGlob(pattern string) (*Set, error) {
+	return parseGlob(s, pattern)
+}
+
+// parseGlob is the implementation of the function and method ParseGlob.
+func parseGlob(s *Set, pattern string) (*Set, error) {
+	filenames, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, err
+	}
+	if len(filenames) == 0 {
+		return nil, fmt.Errorf("template: pattern matches no files: %#q", pattern)
+	}
+	return parseFiles(s, filenames...)
 }
