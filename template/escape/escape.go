@@ -10,8 +10,8 @@ import (
 	"html"
 	"io"
 
-	"code.google.com/p/sadbox/text/template"
-	"code.google.com/p/sadbox/text/template/parse"
+	"code.google.com/p/sadbox/template"
+	"code.google.com/p/sadbox/template/parse"
 )
 
 // escapeTemplates rewrites the named templates, which must be

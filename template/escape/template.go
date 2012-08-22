@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"code.google.com/p/sadbox/text/template"
-	"code.google.com/p/sadbox/text/template/parse"
+	"code.google.com/p/sadbox/template"
+	"code.google.com/p/sadbox/template/parse"
 )
 
 // Template is a specialized template.Template that produces a safe HTML

@@ -11,7 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"code.google.com/p/sadbox/text/template"
+	"code.google.com/p/sadbox/template"
 )
 
 // templateFile defines the contents of a template to be stored in a file, for testing.

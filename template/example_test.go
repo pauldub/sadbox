@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"code.google.com/p/sadbox/text/template"
+	"code.google.com/p/sadbox/template"
 )
 
 func ExampleTemplate() {

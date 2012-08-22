@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"code.google.com/p/sadbox/text/template"
+	"code.google.com/p/sadbox/template"
 )
 
 // This example demonstrates a custom function to process template text.

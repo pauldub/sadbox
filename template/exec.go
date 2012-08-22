@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"code.google.com/p/sadbox/text/template/parse"
+	"code.google.com/p/sadbox/template/parse"
 )
 
 // state represents the state of an execution. It's not part of the
