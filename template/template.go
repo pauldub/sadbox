@@ -100,27 +100,10 @@ func Must(s *Set, err error) *Set {
 	return s
 }
 
-// Parse creates a new Set with the template definitions from the given text.
-// If an error occurs, parsing stops and the returned set is nil.
-func Parse(text string) (*Set, error) {
-	s, err := new(Set).Parse(text)
-	if err != nil {
-		return nil, err
-	}
-	return s, nil
-}
-
-// Parse parses the given text and adds the resulting templates to the set.
-// If an error occurs, parsing stops and the returned set is nil; otherwise
-// it is s.
-func (s *Set) Parse(text string) (*Set, error) {
-	return s.ParseNamed(text, "source")
-}
-
-// ParseNamed is the same as Parse, but defines a name for debugging purposes.
-// Useful to parse multiple files, for example, to know which one caused an
-// error.
-func (s *Set) ParseNamed(text, name string) (*Set, error) {
+// parseNamed parses the given text and adds the resulting templates to the
+// set. The name is only used for debugging purposes: useful to parse multiple
+// files or glob, for example, to know which file caused an error.
+func (s *Set) parseNamed(text, name string) (*Set, error) {
 	s.init()
 	// Maybe instead of passing s.tmpl we should create a new map, and only
 	// add the parsed templates if no error occurred?
@@ -131,22 +114,30 @@ func (s *Set) ParseNamed(text, name string) (*Set, error) {
 	return s, nil
 }
 
+// Parse creates a new Set with the template definitions from the given text.
+// If an error occurs, parsing stops and the returned set is nil.
+func Parse(text string) (*Set, error) {
+	return new(Set).Parse(text)
+}
+
+// Parse parses the given text and adds the resulting templates to the set.
+// If an error occurs, parsing stops and the returned set is nil; otherwise
+// it is s.
+func (s *Set) Parse(text string) (*Set, error) {
+	return s.parseNamed(text, "source")
+}
+
 // ParseFiles creates a new Set with the template definitions from the named
 // files. There must be at least one file. If an error occurs, parsing stops
 // and the returned set is nil.
 func ParseFiles(filenames ...string) (*Set, error) {
-	return parseFiles(new(Set), filenames...)
+	return new(Set).ParseFiles(filenames...)
 }
 
 // ParseFiles parses the named files and adds the resulting templates to the
 // set. There must be at least one file. If an error occurs, parsing stops and
 // the returned set is nil; otherwise it is s.
 func (s *Set) ParseFiles(filenames ...string) (*Set, error) {
-	return parseFiles(s, filenames...)
-}
-
-// parseFiles is the helper for the method and function.
-func parseFiles(s *Set, filenames ...string) (*Set, error) {
 	if len(filenames) == 0 {
 		// Not really a problem, but be consistent.
 		return nil, fmt.Errorf("template: no files named in call to ParseFiles")
@@ -156,7 +147,7 @@ func parseFiles(s *Set, filenames ...string) (*Set, error) {
 		if err != nil {
 			return nil, err
 		}
-		if _, err = s.ParseNamed(string(b), filename); err != nil {
+		if _, err = s.parseNamed(string(b), filename); err != nil {
 			return nil, err
 		}
 	}
@@ -169,7 +160,7 @@ func parseFiles(s *Set, filenames ...string) (*Set, error) {
 // ParseFiles with the list of files matched by the pattern. If an error
 // occurs, parsing stops and the returned set is nil.
 func ParseGlob(pattern string) (*Set, error) {
-	return parseGlob(new(Set), pattern)
+	return new(Set).ParseGlob(pattern)
 }
 
 // ParseGlob parses the template definitions in the files identified by the
@@ -179,11 +170,6 @@ func ParseGlob(pattern string) (*Set, error) {
 // pattern. If an error occurs, parsing stops and the returned set is nil;
 // otherwise it is s.
 func (s *Set) ParseGlob(pattern string) (*Set, error) {
-	return parseGlob(s, pattern)
-}
-
-// parseGlob is the implementation of the function and method ParseGlob.
-func parseGlob(s *Set, pattern string) (*Set, error) {
 	filenames, err := filepath.Glob(pattern)
 	if err != nil {
 		return nil, err

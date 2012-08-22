@@ -109,8 +109,8 @@ func errRecover(errp *error) {
 	}
 }
 
-// ExecuteTemplate applies the template with the given name
-// to the specified data object and writes the output to wr.
+// Execute applies the template with the given name to the specified data
+// object and writes the output to wr.
 func (s *Set) Execute(wr io.Writer, name string, data interface{}) (err error) {
 	tmpl := s.tmpl[name]
 	if tmpl == nil {
