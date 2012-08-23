@@ -144,7 +144,7 @@ func ExampleTemplate_share() {
 	// the drivers, then add a definition of T2 to the template name space.
 
 	// 1. Clone the helper set to create a new name space from which to run them.
-	first := drivers.Clone()
+	first, _ := drivers.Clone()
 	// 2. Define T2, version A, and parse it.
 	first, err := first.Parse("{{define `T2`}}T2, version A{{end}}")
 	if err != nil {
@@ -153,7 +153,7 @@ func ExampleTemplate_share() {
 
 	// Now repeat the whole thing, using a different version of T2.
 	// 1. Clone the drivers.
-	second := drivers.Clone()
+	second, _ := drivers.Clone()
 	// 2. Define T2, version B, and parse it.
 	second, err = second.Parse("{{define `T2`}}T2, version B{{end}}")
 	if err != nil {

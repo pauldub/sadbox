@@ -15,11 +15,11 @@ import (
 	"unicode"
 )
 
-// Parse parses a template string and adds the template nodes to the dst map.
-func Parse(dst map[string]*DefineNode, name, text, leftDelim, rightDelim string, funcs ...map[string]interface{}) error {
+// Parse parses a string and returns a SetNode with the parsed templates.
+func Parse(name, text, leftDelim, rightDelim string, funcs ...map[string]interface{}) (*SetNode, error) {
 	p := &parser{
 		name:  name,
-		dst:   dst,
+		set:   NewSet(),
 		funcs: funcs,
 		vars:  []string{"$"},
 	}
@@ -28,7 +28,7 @@ func Parse(dst map[string]*DefineNode, name, text, leftDelim, rightDelim string,
 
 type parser struct {
 	name      string   // used for debugging only.
-	dst       map[string]*DefineNode
+	set       *SetNode
 	funcs     []map[string]interface{}
 	lex       *lexer
 	token     [2]item  // two-token lookahead for parser.
@@ -134,30 +134,24 @@ func (p *parser) atEOF() bool {
 	return false
 }
 
-// add adds tree to the treeSet.
-func (p *parser) add(name string, node *DefineNode) {
-	if _, ok := p.dst[name]; ok {
-		p.errorf("template: multiple definition of template %q", name)
-	}
-	p.dst[name] = node
-}
-
 // parse is the top-level parser for a template: it only parses {{define}}
 // actions. It runs to EOF.
-func (p *parser) parse(name, text, leftDelim, rightDelim string) (err error) {
+func (p *parser) parse(name, text, leftDelim, rightDelim string) (set *SetNode, err error) {
 	defer p.recover(&err)
 	p.lex = lex(name, text, leftDelim, rightDelim)
+	loop:
 	for {
 		switch p.next().typ {
 		case itemEOF:
-			return
+			break loop
 		case itemLeftDelim:
 			p.expect(itemDefine, "template root")
-			define := p.parseDefinition()
-			p.add(define.Name, define)
+			if err := p.set.add(p.parseDefinition()); err != nil {
+				p.error(err)
+			}
 		}
 	}
-	return
+	return p.set, nil
 }
 
 // parseDefinition parses a {{define}} ...  {{end}} template definition and

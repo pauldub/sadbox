@@ -249,12 +249,9 @@ var builtins = map[string]interface{}{
 
 func testParse(doCopy bool, t *testing.T) {
 	for _, test := range parseTests {
-		//tmpl, err := New(test.name).Parse(test.input, "", "", make(map[string]*Tree), builtins)
-		dst := make(map[string]*DefineNode)
 		input := fmt.Sprintf(`{{define "foo"}}%s{{end}}`, test.input)
 		expect := fmt.Sprintf(`{{define "foo"}}%s{{end}}`, test.result)
-		err := Parse(dst, "", input, "", "", builtins)
-		tmpl := dst["foo"]
+		set, err := Parse("", input, "", "", builtins)
 		switch {
 		case err == nil && !test.ok:
 			t.Errorf("%q: expected error; got none", test.name)
@@ -268,10 +265,11 @@ func testParse(doCopy bool, t *testing.T) {
 				fmt.Printf("%s: %s\n\t%s\n", test.name, input, err)
 			}
 			continue
-		case tmpl == nil && test.ok:
+		case set.Get("foo") == nil && test.ok:
 			t.Errorf("%q: template not found", test.name)
 			continue
 		}
+		tmpl := set.Get("foo")
 		var result string
 		if doCopy {
 			result = tmpl.Copy().String()

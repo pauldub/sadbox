@@ -65,13 +65,13 @@ func TestMultiParse(t *testing.T) {
 		if template == nil {
 			continue
 		}
-		if len(template.tmpl) != len(test.names) {
-			t.Errorf("%s: wrong number of templates; wanted %d got %d", test.name, len(test.names), len(template.tmpl))
+		if len(template.tmpl.GetAll()) != len(test.names) {
+			t.Errorf("%s: wrong number of templates; wanted %d got %d", test.name, len(test.names), len(template.tmpl.GetAll()))
 			continue
 		}
 		for i, name := range test.names {
-			tmpl, ok := template.tmpl[name]
-			if !ok {
+			tmpl := template.tmpl.Get(name)
+			if tmpl == nil {
 				t.Errorf("%s: can't find template %q", test.name, name)
 				continue
 			}
@@ -198,7 +198,7 @@ func TestClone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	clone := template.Clone()
+	clone, _ := template.Clone()
 	// Add variants to both.
 	_, err = template.Parse(cloneText3)
 	if err != nil {
@@ -209,7 +209,7 @@ func TestClone(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Verify that the clone is self-consistent.
-	for k, v := range clone.tmpl {
+	for k, v := range clone.tmpl.GetAll() {
 		if v == nil {
 			t.Errorf("clone %q contain nil node", k)
 		}
@@ -243,7 +243,7 @@ func TestRedefinition(t *testing.T) {
 	if _, err = tmpl.Parse(`{{define "test"}}bar{{end}}`); err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "multiple definition") {
+	if !strings.Contains(err.Error(), "duplicated template") {
 		t.Fatalf("expected redefinition error; got %v", err)
 	}
 }

@@ -13,6 +13,14 @@ import (
 	"code.google.com/p/sadbox/template/parse"
 )
 
+type mode int
+
+const (
+	ModeDefault mode = iota // Default mode is ModeHTML
+	ModeText // No escaping, as in standard library's text/template
+	ModeHTML // HTML escaping, as in standard library's html/template
+)
+
 // Set stores a collection of parsed templates.
 //
 // To add a template to the set call set.Parse (or other Parse* methods):
@@ -23,14 +31,14 @@ import (
 //     }
 //
 // To execute a template call set.Execute passing an io.Writer, the name of
-// the template to execute, and related data:
+// the template to execute and related data:
 //
 //     err = set.Execute(os.Stderr, "hello", nil)
 //     if err != nil {
 //         // do something with the execution error...
 //     }
 type Set struct {
-	tmpl       map[string]*parse.DefineNode
+	tmpl       *parse.SetNode
 	leftDelim  string
 	rightDelim string
 	// We use two maps, one for parsing and one for execution.
@@ -38,17 +46,22 @@ type Set struct {
 	// expose reflection to the client.
 	parseFuncs FuncMap
 	execFuncs  map[string]reflect.Value
+	mode       mode
 }
 
+// init initializes the set fields to default values.
 func (s *Set) init() {
 	if s.tmpl == nil {
-		s.tmpl = make(map[string]*parse.DefineNode)
+		s.tmpl = parse.NewSet()
 	}
 	if s.execFuncs == nil {
 		s.execFuncs = make(map[string]reflect.Value)
 	}
 	if s.parseFuncs == nil {
 		s.parseFuncs = make(FuncMap)
+	}
+	if s.mode == ModeDefault {
+		s.mode = ModeHTML
 	}
 }
 
@@ -81,25 +94,40 @@ func (s *Set) Funcs(funcMap FuncMap) *Set {
 	return s
 }
 
+// Mode sets the escaping mode for the templates in this set. Default is
+// ModeHTML, which behaves like the standard library's html/template package.
+// Set it to ModeText for no escaping, like in text/template.
+// Changing the mode after a template was added to the set results in error.
+func (s *Set) Mode(m mode) error {
+	if s.tmpl.IsClosed() {
+		return fmt.Errorf("template: mode can't be changed after templates were added")
+	}
+	s.mode = m
+	return nil
+}
+
 // Clone returns a duplicate of the template, including all associated
 // templates. The actual representation is not copied, but the name space of
 // associated templates is, so further calls to Parse in the copy will add
 // templates to the copy but not to the original. Clone can be used to prepare
 // common templates and use them with variant definitions for other templates
 // by adding the variants after the clone is made.
-func (s *Set) Clone() *Set {
+func (s *Set) Clone() (*Set, error) {
+	s.init()
+	tmpl, err := s.tmpl.CopyShallow()
+	if err != nil {
+		return nil, fmt.Errorf("template: Set cannot be cloned after it has executed")
+	}
 	ns := new(Set).Delims(s.leftDelim, s.rightDelim)
 	ns.init()
-	for k, v := range s.tmpl {
-		ns.tmpl[k] = v
-	}
+	ns.tmpl = tmpl
 	for k, v := range s.parseFuncs {
 		ns.parseFuncs[k] = v
 	}
 	for k, v := range s.execFuncs {
 		ns.execFuncs[k] = v
 	}
-	return ns
+	return ns, nil
 }
 
 // Functions and methods to parse templates -----------------------------------
@@ -120,10 +148,11 @@ func Must(s *Set, err error) *Set {
 // files or glob, for example, to know which file caused an error.
 func (s *Set) parseNamed(text, name string) (*Set, error) {
 	s.init()
-	// Maybe instead of passing s.tmpl we should create a new map, and only
-	// add the parsed templates if no error occurred?
-	err := parse.Parse(s.tmpl, name, text, s.leftDelim, s.rightDelim, builtins, s.parseFuncs)
+	tmpl, err := parse.Parse(name, text, s.leftDelim, s.rightDelim, builtins, s.parseFuncs)
 	if err != nil {
+		return nil, err
+	}
+	if err = s.tmpl.AddSet(tmpl); err != nil {
 		return nil, err
 	}
 	return s, nil

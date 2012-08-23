@@ -60,12 +60,11 @@ var benchData = map[string]interface{}{
 
 func BenchmarkSad(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		tree := make(map[string]*DefineNode)
-		err := Parse(tree, "page", benchTemplate, "{{", "}}")
+		tree, err := Parse("page", benchTemplate, "{{", "}}")
 		if err != nil {
 			panic(err)
 		}
-		if len(tree) != 1 {
+		if len(tree.GetAll()) != 1 {
 			panic("template not parsed")
 		}
 	}
