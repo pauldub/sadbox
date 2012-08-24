@@ -23,7 +23,7 @@ of the differences:
 	  Jinja2 or Mako provide through template inheritance.
 
 The rest is basically the same, the grammar is the same, and the syntax is the
-same, as it is built on top of the same zen code from these packages:
+same, as it is built on top of the zen foundations from these packages:
 
 	http://golang.org/pkg/text/template
 	http://golang.org/pkg/html/template
@@ -63,6 +63,10 @@ calling Set.Escape after all templates were added to a set:
 	set, err := template.Parse(`{{define "hello"}}Hello, World.{{end}}`)
 	///...
 	set, err := set.Escape()
+
+Without calling Escape the template works like in the text/template package.
+After calling Escape it behaves like in the html/template package, escaping
+HTML/CSS/JS data contextually, as needed.
 
 The set must not be changed after escaping was performed.
 
