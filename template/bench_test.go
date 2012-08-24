@@ -7,10 +7,11 @@ package template
 import (
 	"bytes"
 	"testing"
-	"text/template"
-	"text/template/parse"
+	htmlTemplate "html/template"
+	textTemplate "text/template"
+	textParse    "text/template/parse"
 
-	ourParse "code.google.com/p/sadbox/template/parse"
+	"code.google.com/p/sadbox/template/parse"
 )
 
 var benchTemplate = `
@@ -76,19 +77,7 @@ var benchData = map[string]interface{}{
 	},
 }
 
-func BenchmarkOurParser(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		tree, err := ourParse.Parse("page", benchTemplate, "{{", "}}")
-		if err != nil {
-			panic(err)
-		}
-		if len(tree) != 4 {
-			panic("template not parsed")
-		}
-	}
-}
-
-func BenchmarkStandardParser(b *testing.B) {
+func BenchmarkParser(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		tree, err := parse.Parse("page", benchTemplate, "{{", "}}")
 		if err != nil {
@@ -100,7 +89,21 @@ func BenchmarkStandardParser(b *testing.B) {
 	}
 }
 
-func BenchmarkOurExecutor(b *testing.B) {
+func BenchmarkStdParser(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		tree, err := textParse.Parse("page", benchTemplate, "{{", "}}")
+		if err != nil {
+			panic(err)
+		}
+		if len(tree) != 4 {
+			panic("template not parsed")
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------
+
+func BenchmarkTextExecutor(b *testing.B) {
 	set, err := Parse(benchTemplate)
 	if err != nil {
 		panic(err)
@@ -114,8 +117,42 @@ func BenchmarkOurExecutor(b *testing.B) {
 	}
 }
 
-func BenchmarkStandardExecutor(b *testing.B) {
-	set, err := template.New("bench").Parse(benchTemplate)
+func BenchmarkStdTextExecutor(b *testing.B) {
+	set, err := textTemplate.New("bench").Parse(benchTemplate)
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < b.N; i++ {
+		var buf bytes.Buffer
+		err = set.ExecuteTemplate(&buf, "page", benchData)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+// ----------------------------------------------------------------------------
+
+func BenchmarkHtmlExecutor(b *testing.B) {
+	set, err := Parse(benchTemplate)
+	if err != nil {
+		panic(err)
+	}
+	set, err = set.Escape()
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < b.N; i++ {
+		var buf bytes.Buffer
+		err = set.Execute(&buf, "page", benchData)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func BenchmarkStdHtmlExecutor(b *testing.B) {
+	set, err := htmlTemplate.New("bench").Parse(benchTemplate)
 	if err != nil {
 		panic(err)
 	}

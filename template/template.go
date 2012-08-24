@@ -18,14 +18,14 @@ import (
 //
 // To create a new set call Parse (or other Parse* functions):
 //
-//     set, err := Parse("{{define "hello"}}Hello, World.{{end}}")
+//     set, err := Parse(`{{define "hello"}}Hello, World.{{end}}`)
 //     if err != nil {
 //         // do something with the parsing error...
 //     }
 //
 // To add more templates to the set call Set.Parse (or any Set.Parse* methods):
 //
-//     set, err = set.Parse("{{define "bye"}}Good bye, World.{{end}}")
+//     set, err = set.Parse(`{{define "bye"}}Good bye, World.{{end}}`)
 //     if err != nil {
 //         // do something with the parsing error...
 //     }
