@@ -9,17 +9,19 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"code.google.com/p/sadbox/template/escape"
 )
 
 func TestTypedContent(t *testing.T) {
 	data := []interface{}{
 		`<b> "foo%" O'Reilly &bar;`,
-		CSS(`a[href =~ "//example.com"]#foo`),
-		HTML(`Hello, <b>World</b> &amp;tc!`),
-		HTMLAttr(` dir="ltr"`),
-		JS(`c && alert("Hello, World!");`),
-		JSStr(`Hello, World & O'Reilly\x21`),
-		URL(`greeting=H%69&addressee=(World)`),
+		escape.CSS(`a[href =~ "//example.com"]#foo`),
+		escape.HTML(`Hello, <b>World</b> &amp;tc!`),
+		escape.HTMLAttr(` dir="ltr"`),
+		escape.JS(`c && alert("Hello, World!");`),
+		escape.JSStr(`Hello, World & O'Reilly\x21`),
+		escape.URL(`greeting=H%69&addressee=(World)`),
 	}
 
 	// For each content sensitive escaper, see how it does on
@@ -203,13 +205,15 @@ func TestTypedContent(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		tmpl := Must(New("x").Parse(test.input))
+		input := fmt.Sprintf(`{{define "t"}}%s{{end}}`, test.input)
+		tmpl := Must(new(Set).Parse(input))
+		tmpl = Must(tmpl.Escape())
 		pre := strings.Index(test.input, "{{.}}")
 		post := len(test.input) - (pre + 5)
 		var b bytes.Buffer
 		for i, x := range data {
 			b.Reset()
-			if err := tmpl.Execute(&b, x); err != nil {
+			if err := tmpl.Execute(&b, "t", x); err != nil {
 				t.Errorf("%q with %v: %s", test.input, x, err)
 				continue
 			}
@@ -222,11 +226,11 @@ func TestTypedContent(t *testing.T) {
 }
 
 // Test that we print using the String method. Was issue 3073.
-type stringer struct {
+type stringer2 struct {
 	v int
 }
 
-func (s *stringer) String() string {
+func (s *stringer2) String() string {
 	return fmt.Sprintf("string=%d", s.v)
 }
 
@@ -239,10 +243,11 @@ func (s *errorer) Error() string {
 }
 
 func TestStringer(t *testing.T) {
-	s := &stringer{3}
+	s := &stringer2{3}
 	b := new(bytes.Buffer)
-	tmpl := Must(New("x").Parse("{{.}}"))
-	if err := tmpl.Execute(b, s); err != nil {
+	tmpl := Must(new(Set).Parse(`{{define "t"}}{{.}}{{end}}`))
+	tmpl = Must(tmpl.Escape())
+	if err := tmpl.Execute(b, "t", s); err != nil {
 		t.Fatal(err)
 	}
 	var expect = "string=3"
@@ -251,7 +256,7 @@ func TestStringer(t *testing.T) {
 	}
 	e := &errorer{7}
 	b.Reset()
-	if err := tmpl.Execute(b, e); err != nil {
+	if err := tmpl.Execute(b, "t", e); err != nil {
 		t.Fatal(err)
 	}
 	expect = "error=7"

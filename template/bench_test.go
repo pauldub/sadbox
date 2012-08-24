@@ -2,11 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package parse
+package template
 
 import (
+	"bytes"
 	"testing"
+	"text/template"
 	"text/template/parse"
+
+	ourParse "code.google.com/p/sadbox/template/parse"
 )
 
 var benchTemplate = `
@@ -14,12 +18,10 @@ var benchTemplate = `
 <!doctype html>
 <html>
   <head>
-	<title>{{.PageTitle}}</title>
+	<title>{{template "title" .}}</title>
   </head>
   <body>
-	<div class="header">
-	  <h1>{{.PageTitle}}</h1>
-	</div>
+	{{template "header" .}}
 	<ul class="navigation">
 	{{range .Menu}}
 	  <li><a href="{{.Link}}">{{.Text}}</a></li>
@@ -38,9 +40,25 @@ var benchTemplate = `
 	  {{end}}
 	  </table>
 	</div>
+	{{template "footer" .}}
   </body>
 </html>
-{{end}}`
+{{end}}
+
+{{define "title"}}{{.PageTitle}}{{end}}
+
+{{define "header"}}
+  <div class="header">
+	<h1>{{.PageTitle}}</h1>
+  </div>
+{{end}}
+
+{{define "footer"}}
+  <div class="footer">
+	<p>Copyright 2012 The Gorilla Authors.</p>
+  </div>
+{{end}}
+`
 
 // to bench execution one day
 var benchData = map[string]interface{}{
@@ -58,26 +76,54 @@ var benchData = map[string]interface{}{
 	},
 }
 
-func BenchmarkSad(b *testing.B) {
+func BenchmarkOurParser(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		tree, err := Parse("page", benchTemplate, "{{", "}}")
+		tree, err := ourParse.Parse("page", benchTemplate, "{{", "}}")
 		if err != nil {
 			panic(err)
 		}
-		if len(tree.GetAll()) != 1 {
+		if len(tree) != 4 {
 			panic("template not parsed")
 		}
 	}
 }
 
-func BenchmarkStd(b *testing.B) {
+func BenchmarkStandardParser(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		tree, err := parse.Parse("page", benchTemplate, "{{", "}}")
 		if err != nil {
 			panic(err)
 		}
-		if len(tree) != 1 {
+		if len(tree) != 4 {
 			panic("template not parsed")
+		}
+	}
+}
+
+func BenchmarkOurExecutor(b *testing.B) {
+	set, err := Parse(benchTemplate)
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < b.N; i++ {
+		var buf bytes.Buffer
+		err = set.Execute(&buf, "page", benchData)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func BenchmarkStandardExecutor(b *testing.B) {
+	set, err := template.New("bench").Parse(benchTemplate)
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < b.N; i++ {
+		var buf bytes.Buffer
+		err = set.ExecuteTemplate(&buf, "page", benchData)
+		if err != nil {
+			panic(err)
 		}
 	}
 }

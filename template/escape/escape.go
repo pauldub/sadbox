@@ -2,28 +2,22 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package template
+package escape
 
 import (
 	"bytes"
 	"fmt"
 	"html"
-	"io"
 
-	"code.google.com/p/sadbox/template"
 	"code.google.com/p/sadbox/template/parse"
 )
 
-// escapeTemplates rewrites the named templates, which must be
-// associated with t, to guarantee that the output of any of the named
-// templates is properly escaped.  Names should include the names of
-// all templates that might be Executed but need not include helper
-// templates.  If no error is returned, then the named templates have
-// been modified.  Otherwise the named templates have been rendered
-// unusable.
-func escapeTemplates(tmpl *Template, names ...string) error {
-	e := newEscaper(tmpl)
-	for _, name := range names {
+// EscapeTree rewrites the given template tree to guarantee that the output
+// of any template is properly escaped. If no error is returned, then the tree
+// has been modified.  Otherwise the tree is cleaned and became unusable.
+func EscapeTree(tree parse.Tree) (parse.Tree, error) {
+	e := newEscaper(tree)
+	for name, _ := range tree {
 		c, _ := e.escapeTree(context{}, name, 0)
 		var err error
 		if c.err != nil {
@@ -32,22 +26,19 @@ func escapeTemplates(tmpl *Template, names ...string) error {
 			err = &Error{ErrEndContext, name, 0, fmt.Sprintf("ends in a non-text context: %v", c)}
 		}
 		if err != nil {
-			// Prevent execution of unsafe templates.
-			for _, name := range names {
-				if t := tmpl.set[name]; t != nil {
-					t.text.Tree = nil
-				}
+			// Remove all, preventing execution of unsafe templates.
+			for k, _ := range tree {
+				delete(tree, k)
 			}
-			return err
+			return nil, err
 		}
-		tmpl.escaped = true
 	}
 	e.commit()
-	return nil
+	return e.tmpl, nil
 }
 
-// funcMap maps command names to functions that render their inputs safe.
-var funcMap = template.FuncMap{
+// FuncMap maps command names to functions that render their inputs safe.
+var FuncMap = map[string]interface{}{
 	"html_template_attrescaper":     attrEscaper,
 	"html_template_commentescaper":  commentEscaper,
 	"html_template_cssescaper":      cssEscaper,
@@ -77,13 +68,13 @@ var equivEscapers = map[string]string{
 // escaper collects type inferences about templates and changes needed to make
 // templates injection safe.
 type escaper struct {
-	tmpl *Template
+	tmpl parse.Tree
 	// output[templateName] is the output context for a templateName that
 	// has been mangled to include its input context.
 	output map[string]context
 	// derived[c.mangle(name)] maps to a template derived from the template
 	// named name templateName for the start context c.
-	derived map[string]*template.Template
+	derived parse.Tree
 	// called[templateName] is a set of called mangled template names.
 	called map[string]bool
 	// xxxNodeEdits are the accumulated edits to apply during commit.
@@ -95,11 +86,11 @@ type escaper struct {
 }
 
 // newEscaper creates a blank escaper for the given set.
-func newEscaper(t *Template) *escaper {
+func newEscaper(tree parse.Tree) *escaper {
 	return &escaper{
-		t,
+		tree,
 		map[string]context{},
-		map[string]*template.Template{},
+		parse.Tree{},
 		map[string]bool{},
 		map[*parse.ActionNode][]string{},
 		map[*parse.TemplateNode]string{},
@@ -263,7 +254,7 @@ func ensurePipelineContains(p *parse.PipeNode, s []string) {
 	p.Cmds = newCmds
 }
 
-// redundantFuncs[a][b] implies that funcMap[b](funcMap[a](x)) == funcMap[a](x)
+// redundantFuncs[a][b] implies that FuncMap[b](FuncMap[a](x)) == FuncMap[a](x)
 // for all x.
 var redundantFuncs = map[string]map[string]bool{
 	"html_template_commentescaper": {
@@ -494,7 +485,7 @@ func (e *escaper) escapeTree(c context, name string, line int) (context, string)
 	if t == nil {
 		// Two cases: The template exists but is empty, or has never been mentioned at
 		// all. Distinguish the cases in the error messages.
-		if e.tmpl.set[name] != nil {
+		if e.tmpl[name] != nil {
 			return context{
 				state: stateError,
 				err:   errorf(ErrNoSuchTemplate, line, "%q is an incomplete or empty template", name),
@@ -510,9 +501,12 @@ func (e *escaper) escapeTree(c context, name string, line int) (context, string)
 		// with different top level templates, or clone if necessary.
 		dt := e.template(dname)
 		if dt == nil {
-			dt = template.New(dname)
-			dt.Tree = &parse.Tree{Name: dname, Root: t.Root.CopyList()}
-			e.derived[dname] = dt
+			dt = t.CopyDefine()
+			dt.Name = dname
+			if err := e.derived.Add(dt); err != nil {
+				// Should never happen.
+				panic(err)
+			}
 		}
 		t = dt
 	}
@@ -521,7 +515,7 @@ func (e *escaper) escapeTree(c context, name string, line int) (context, string)
 
 // computeOutCtx takes a template and its start context and computes the output
 // context while storing any inferences in e.
-func (e *escaper) computeOutCtx(c context, t *template.Template) context {
+func (e *escaper) computeOutCtx(c context, t *parse.DefineNode) context {
 	// Propagate context over the body.
 	c1, ok := e.escapeTemplateBody(c, t)
 	if !ok {
@@ -535,7 +529,7 @@ func (e *escaper) computeOutCtx(c context, t *template.Template) context {
 		return context{
 			state: stateError,
 			// TODO: Find the first node with a line in t.text.Tree.Root
-			err: errorf(ErrOutputContext, 0, "cannot compute output context for template %s", t.Name()),
+			err: errorf(ErrOutputContext, 0, "cannot compute output context for template %s", t.Name),
 		}
 	}
 	return c1
@@ -544,13 +538,13 @@ func (e *escaper) computeOutCtx(c context, t *template.Template) context {
 // escapeTemplateBody escapes the given template assuming the given output
 // context, and returns the best guess at the output context and whether the
 // assumption was correct.
-func (e *escaper) escapeTemplateBody(c context, t *template.Template) (context, bool) {
+func (e *escaper) escapeTemplateBody(c context, t *parse.DefineNode) (context, bool) {
 	filter := func(e1 *escaper, c1 context) bool {
 		if c1.state == stateError {
 			// Do not update the input escaper, e.
 			return false
 		}
-		if !e1.called[t.Name()] {
+		if !e1.called[t.Name] {
 			// If t is not recursively called, then c1 is an
 			// accurate output context.
 			return true
@@ -562,8 +556,8 @@ func (e *escaper) escapeTemplateBody(c context, t *template.Template) (context, 
 	// take the fast path out of escapeTree instead of infinitely recursing.
 	// Naively assuming that the input context is the same as the output
 	// works >90% of the time.
-	e.output[t.Name()] = c
-	return e.escapeListConditionally(c, t.Tree.Root, filter)
+	e.output[t.Name] = c
+	return e.escapeListConditionally(c, t.List, filter)
 }
 
 // delimEnds maps each delim to a string of characters that terminate it.
@@ -730,11 +724,8 @@ func (e *escaper) editTextNode(n *parse.TextNode, text []byte) {
 // commit applies changes to actions and template calls needed to contextually
 // autoescape content and adds any derived templates to the set.
 func (e *escaper) commit() {
-	for name := range e.output {
-		e.template(name).Funcs(funcMap)
-	}
 	for _, t := range e.derived {
-		if _, err := e.tmpl.text.AddParseTree(t.Name(), t.Tree); err != nil {
+		if err := e.tmpl.Add(t); err != nil {
 			panic("error adding derived template")
 		}
 	}
@@ -750,51 +741,10 @@ func (e *escaper) commit() {
 }
 
 // template returns the named template given a mangled template name.
-func (e *escaper) template(name string) *template.Template {
-	t := e.tmpl.text.Lookup(name)
+func (e *escaper) template(name string) *parse.DefineNode {
+	t := e.tmpl[name]
 	if t == nil {
 		t = e.derived[name]
 	}
 	return t
-}
-
-// Forwarding functions so that clients need only import this package
-// to reach the general escaping functions of text/template.
-
-// HTMLEscape writes to w the escaped HTML equivalent of the plain text data b.
-func HTMLEscape(w io.Writer, b []byte) {
-	template.HTMLEscape(w, b)
-}
-
-// HTMLEscapeString returns the escaped HTML equivalent of the plain text data s.
-func HTMLEscapeString(s string) string {
-	return template.HTMLEscapeString(s)
-}
-
-// HTMLEscaper returns the escaped HTML equivalent of the textual
-// representation of its arguments.
-func HTMLEscaper(args ...interface{}) string {
-	return template.HTMLEscaper(args...)
-}
-
-// JSEscape writes to w the escaped JavaScript equivalent of the plain text data b.
-func JSEscape(w io.Writer, b []byte) {
-	template.JSEscape(w, b)
-}
-
-// JSEscapeString returns the escaped JavaScript equivalent of the plain text data s.
-func JSEscapeString(s string) string {
-	return template.JSEscapeString(s)
-}
-
-// JSEscaper returns the escaped JavaScript equivalent of the textual
-// representation of its arguments.
-func JSEscaper(args ...interface{}) string {
-	return template.JSEscaper(args...)
-}
-
-// URLQueryEscaper returns the escaped value of the textual representation of
-// its arguments in a form suitable for embedding in a URL query.
-func URLQueryEscaper(args ...interface{}) string {
-	return template.URLQueryEscaper(args...)
 }

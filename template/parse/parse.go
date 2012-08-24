@@ -16,10 +16,10 @@ import (
 )
 
 // Parse parses a string and returns a SetNode with the parsed templates.
-func Parse(name, text, leftDelim, rightDelim string, funcs ...map[string]interface{}) (*SetNode, error) {
+func Parse(name, text, leftDelim, rightDelim string, funcs ...map[string]interface{}) (Tree, error) {
 	p := &parser{
 		name:  name,
-		set:   NewSet(),
+		tree:  Tree{},
 		funcs: funcs,
 		vars:  []string{"$"},
 	}
@@ -28,7 +28,7 @@ func Parse(name, text, leftDelim, rightDelim string, funcs ...map[string]interfa
 
 type parser struct {
 	name      string   // used for debugging only.
-	set       *SetNode
+	tree      Tree
 	funcs     []map[string]interface{}
 	lex       *lexer
 	token     [2]item  // two-token lookahead for parser.
@@ -136,22 +136,21 @@ func (p *parser) atEOF() bool {
 
 // parse is the top-level parser for a template: it only parses {{define}}
 // actions. It runs to EOF.
-func (p *parser) parse(name, text, leftDelim, rightDelim string) (set *SetNode, err error) {
+func (p *parser) parse(name, text, leftDelim, rightDelim string) (tree Tree, err error) {
 	defer p.recover(&err)
 	p.lex = lex(name, text, leftDelim, rightDelim)
-	loop:
 	for {
 		switch p.next().typ {
 		case itemEOF:
-			break loop
+			return p.tree, nil
 		case itemLeftDelim:
 			p.expect(itemDefine, "template root")
-			if err := p.set.add(p.parseDefinition()); err != nil {
+			if err := p.tree.Add(p.parseDefinition()); err != nil {
 				p.error(err)
 			}
 		}
 	}
-	return p.set, nil
+	return p.tree, nil
 }
 
 // parseDefinition parses a {{define}} ...  {{end}} template definition and

@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 // A node is an element in the parse tree. The interface is trivial.
@@ -52,7 +51,7 @@ const (
 	NodeNumber                     // A numerical constant.
 	NodePipe                       // A pipeline of commands.
 	NodeRange                      // A range action.
-	NodeSet                        // A set of define nodes.
+	NodeTree                       // A tree of define nodes.
 	NodeString                     // A string constant.
 	NodeTemplate                   // A template inv
 	NodeVariable                   // A $ variable.
@@ -735,107 +734,55 @@ func (d *DefineNode) Copy() Node {
 	return d.CopyDefine()
 }
 
-// SetNode represents a collection of DefineNode's. New nodes can't be added
-// after the template has executed.
-type SetNode struct {
-	NodeType
-	mutex  sync.Mutex
-	closed bool
-	nodes  map[string]*DefineNode
+// Tree stores a collection of DefineNode's.
+type Tree map[string]*DefineNode
+
+func (t Tree) Type() NodeType {
+	return NodeTree
 }
 
-func NewSet() *SetNode {
-	return &SetNode{NodeType: NodeSet, nodes: make(map[string]*DefineNode)}
-}
-
-// Close closes the set so that no more DefineNode's can be added.
-func (s *SetNode) Close() {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	s.closed = true
-}
-
-// IsClosed returns whether the set is closed. When closed DefineNode's cannot
-// be added.
-func (s *SetNode) IsClosed() bool {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	return s.closed
-}
-
-// Get returns a DefineNode with the given name.
-func (s *SetNode) Get(name string) *DefineNode {
-	return s.nodes[name]
-}
-
-// GetAll returns a slice with all DefineNode's in the set.
-func (s *SetNode) GetAll() (list []*DefineNode) {
-	for _, n := range s.nodes {
-		list = append(list, n)
+// Add adds a node to the tree.
+func (t Tree) Add(node *DefineNode) error {
+	if _, ok := t[node.Name]; ok {
+		return fmt.Errorf("template: duplicated template name %q", node.Name)
 	}
-	return list
-}
-
-// add adds a node to the set. During parsing mutex is not needed because
-// nobody else has access to the set, only the parser.
-func (s *SetNode) add(node *DefineNode) error {
-	if s.closed {
-		return fmt.Errorf("templates can't be added after the set executed")
-	}
-	if _, ok := s.nodes[node.Name]; ok {
-		return fmt.Errorf("duplicated template name %q", node.Name)
-	}
-	s.nodes[node.Name] = node
+	t[node.Name] = node
 	return nil
 }
 
-// Add adds a DefineNode to the set.
-func (s *SetNode) Add(node *DefineNode) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	return s.add(node)
-}
-
-// AddSet adds all DefineNode's from the given set to the set.
-func (s *SetNode) AddSet(s2 *SetNode) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	for _, n := range s2.nodes {
-		if err := s.add(n); err != nil {
+// AddTree adds all nodes from the given tree to this tree.
+func (t Tree) AddTree(t2 Tree) error {
+	for _, n := range t2 {
+		if err := t.Add(n); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (s *SetNode) String() string {
+// Strings returns a parseable representation of all templates in the tree.
+func (t Tree) String() string {
 	b := new(bytes.Buffer)
-	for _, n := range s.nodes {
+	for _, n := range t {
 		fmt.Fprint(b, n)
 	}
 	return b.String()
 }
 
-// CopyShallow returns a shallow copy of the set: DefineNode's are references
-// to the ones in the original set.
-func (s *SetNode) CopyShallow() (*SetNode, error) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	if s.closed {
-		return nil, fmt.Errorf("templates can't be cloned after the set executed")
+// Copy returns a deep copy of the tree.
+func (t Tree) Copy() Node {
+	nt := Tree{}
+	for k, v := range t {
+		nt[k]= v.CopyDefine()
 	}
-	ss := NewSet()
-	for k, v := range s.nodes {
-		ss.nodes[k]= v
-	}
-	return ss, nil
+	return nt
 }
 
-// Copy returns a deep copy of the set.
-func (s *SetNode) Copy() Node {
-	ss := NewSet()
-	for k, v := range s.nodes {
-		ss.nodes[k]= v.CopyDefine()
+// CopyShallow returns a shallow copy of the tree.
+func (t Tree) CopyShallow() Tree {
+	nt := Tree{}
+	for k, v := range t {
+		nt[k]= v
 	}
-	return ss
+	return nt
 }

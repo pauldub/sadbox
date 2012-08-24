@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package template (html/template) implements data-driven templates for
+Package escape (html/template) implements data-driven templates for
 generating HTML output safe against code injection. It provides the
 same interface as package text/template and should be used instead of
 text/template whenever the output is HTML.
@@ -34,7 +34,7 @@ provided below.
 
 Example
 
-  import "code.google.com/p/sadbox/template"
+  import "text/template"
   ...
   t, err := template.New("foo").Parse(`{{define "T"}}Hello, {{.}}!{{end}}`)
   err = t.ExecuteTemplate(out, "T", "<script>alert('you have been pwned')</script>")
@@ -45,7 +45,7 @@ produces
 
 but the contextual autoescaping in html/template
 
-  import "code.google.com/p/sadbox/html/template"
+  import "html/template"
   ...
   t, err := template.New("foo").Parse(`{{define "T"}}Hello, {{.}}!{{end}}`)
   err = t.ExecuteTemplate(out, "T", "<script>alert('you have been pwned')</script>")
@@ -188,4 +188,4 @@ Least Surprise Property:
 knows that contextual autoescaping happens should be able to look at a {{.}}
 and correctly infer what sanitization happens."
 */
-package template
+package escape

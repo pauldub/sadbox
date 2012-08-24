@@ -10,27 +10,27 @@ import (
 	"path/filepath"
 	"reflect"
 
+	"code.google.com/p/sadbox/template/escape"
 	"code.google.com/p/sadbox/template/parse"
-)
-
-type mode int
-
-const (
-	ModeDefault mode = iota // Default mode is ModeHTML
-	ModeText // No escaping, as in standard library's text/template
-	ModeHTML // HTML escaping, as in standard library's html/template
 )
 
 // Set stores a collection of parsed templates.
 //
-// To add a template to the set call set.Parse (or other Parse* methods):
+// To create a new set call Parse (or other Parse* functions):
 //
-//     set, err := new(template.Set).Parse("{{define "hello"}}Hello, World!{{end}}")
+//     set, err := Parse("{{define "hello"}}Hello, World.{{end}}")
 //     if err != nil {
 //         // do something with the parsing error...
 //     }
 //
-// To execute a template call set.Execute passing an io.Writer, the name of
+// To add more templates to the set call Set.Parse (or any Set.Parse* methods):
+//
+//     set, err = set.Parse("{{define "bye"}}Good bye, World.{{end}}")
+//     if err != nil {
+//         // do something with the parsing error...
+//     }
+//
+// To execute a template call Set.Execute passing an io.Writer, the name of
 // the template to execute and related data:
 //
 //     err = set.Execute(os.Stderr, "hello", nil)
@@ -38,7 +38,7 @@ const (
 //         // do something with the execution error...
 //     }
 type Set struct {
-	tmpl       *parse.SetNode
+	Tree       parse.Tree
 	leftDelim  string
 	rightDelim string
 	// We use two maps, one for parsing and one for execution.
@@ -46,13 +46,12 @@ type Set struct {
 	// expose reflection to the client.
 	parseFuncs FuncMap
 	execFuncs  map[string]reflect.Value
-	mode       mode
 }
 
 // init initializes the set fields to default values.
 func (s *Set) init() {
-	if s.tmpl == nil {
-		s.tmpl = parse.NewSet()
+	if s.Tree == nil {
+		s.Tree = make(parse.Tree)
 	}
 	if s.execFuncs == nil {
 		s.execFuncs = make(map[string]reflect.Value)
@@ -60,18 +59,7 @@ func (s *Set) init() {
 	if s.parseFuncs == nil {
 		s.parseFuncs = make(FuncMap)
 	}
-	if s.mode == ModeDefault {
-		s.mode = ModeHTML
-	}
 }
-
-//func (s *Set) Reset() {
-//	s.tmpl = nil
-//	s.leftDelim = ""
-//	s.rightDelim = ""
-//	s.parseFuncs = nil
-//	s.execFuncs = nil
-//}
 
 // Delims sets the action delimiters to the specified strings, to be used in
 // subsequent calls to Parse. An empty delimiter stands for the corresponding
@@ -94,18 +82,6 @@ func (s *Set) Funcs(funcMap FuncMap) *Set {
 	return s
 }
 
-// Mode sets the escaping mode for the templates in this set. Default is
-// ModeHTML, which behaves like the standard library's html/template package.
-// Set it to ModeText for no escaping, like in text/template.
-// Changing the mode after a template was added to the set results in error.
-func (s *Set) Mode(m mode) error {
-	if s.tmpl.IsClosed() {
-		return fmt.Errorf("template: mode can't be changed after templates were added")
-	}
-	s.mode = m
-	return nil
-}
-
 // Clone returns a duplicate of the template, including all associated
 // templates. The actual representation is not copied, but the name space of
 // associated templates is, so further calls to Parse in the copy will add
@@ -113,55 +89,50 @@ func (s *Set) Mode(m mode) error {
 // common templates and use them with variant definitions for other templates
 // by adding the variants after the clone is made.
 func (s *Set) Clone() (*Set, error) {
-	s.init()
-	tmpl, err := s.tmpl.CopyShallow()
-	if err != nil {
-		return nil, fmt.Errorf("template: Set cannot be cloned after it has executed")
-	}
 	ns := new(Set).Delims(s.leftDelim, s.rightDelim)
 	ns.init()
-	ns.tmpl = tmpl
 	for k, v := range s.parseFuncs {
 		ns.parseFuncs[k] = v
 	}
 	for k, v := range s.execFuncs {
 		ns.execFuncs[k] = v
 	}
+	err := ns.Tree.AddTree(s.Tree.CopyShallow())
+	if err != nil {
+		return nil, err
+	}
 	return ns, nil
 }
 
-// Functions and methods to parse templates -----------------------------------
-
-// Must is a helper that wraps a call to a function returning (*Set, error)
-// and panics if the error is non-nil. It is intended for use in variable
-// initializations such as
-//	var set = template.Must(template.Parse("text"))
-func Must(s *Set, err error) *Set {
-	if err != nil {
-		panic(err)
-	}
-	return s
+// Escape rewrites the set executing contextual HTML escaping in all
+// templates, like in the standard html/template package.
+//
+// This must be called only once, after all templates were added to the set.
+//
+// If escaping fails, all templates are removed from the set, so that unsafe
+// templates can't be executed.
+func (s *Set) Escape() (*Set, error) {
+	var err error
+	s.Tree, err = escape.EscapeTree(s.Tree)
+	s.Funcs(escape.FuncMap)
+	return s, err
 }
+
+// Parsing --------------------------------------------------------------------
 
 // parseNamed parses the given text and adds the resulting templates to the
 // set. The name is only used for debugging purposes: useful to parse multiple
 // files or glob, for example, to know which file caused an error.
+// Adding templates after the set executed results in error.
 func (s *Set) parseNamed(text, name string) (*Set, error) {
 	s.init()
-	tmpl, err := parse.Parse(name, text, s.leftDelim, s.rightDelim, builtins, s.parseFuncs)
-	if err != nil {
+	if tree, err := parse.Parse(name, text, s.leftDelim, s.rightDelim, builtins,
+		s.parseFuncs); err != nil {
 		return nil, err
-	}
-	if err = s.tmpl.AddSet(tmpl); err != nil {
+	} else if err = s.Tree.AddTree(tree); err != nil {
 		return nil, err
 	}
 	return s, nil
-}
-
-// Parse creates a new Set with the template definitions from the given text.
-// If an error occurs, parsing stops and the returned set is nil.
-func Parse(text string) (*Set, error) {
-	return new(Set).Parse(text)
 }
 
 // Parse parses the given text and adds the resulting templates to the set.
@@ -169,13 +140,6 @@ func Parse(text string) (*Set, error) {
 // it is s.
 func (s *Set) Parse(text string) (*Set, error) {
 	return s.parseNamed(text, "source")
-}
-
-// ParseFiles creates a new Set with the template definitions from the named
-// files. There must be at least one file. If an error occurs, parsing stops
-// and the returned set is nil.
-func ParseFiles(filenames ...string) (*Set, error) {
-	return new(Set).ParseFiles(filenames...)
 }
 
 // ParseFiles parses the named files and adds the resulting templates to the
@@ -187,24 +151,13 @@ func (s *Set) ParseFiles(filenames ...string) (*Set, error) {
 		return nil, fmt.Errorf("template: no files named in call to ParseFiles")
 	}
 	for _, filename := range filenames {
-		b, err := ioutil.ReadFile(filename)
-		if err != nil {
+		if b, err := ioutil.ReadFile(filename); err != nil {
 			return nil, err
-		}
-		if _, err = s.parseNamed(string(b), filename); err != nil {
+		} else if _, err = s.parseNamed(string(b), filename); err != nil {
 			return nil, err
 		}
 	}
 	return s, nil
-}
-
-// ParseGlob creates a new Set with the template definitions from the
-// files identified by the pattern. The pattern is processed by filepath.Glob
-// and must match at least one file. ParseGlob is equivalent to calling
-// ParseFiles with the list of files matched by the pattern. If an error
-// occurs, parsing stops and the returned set is nil.
-func ParseGlob(pattern string) (*Set, error) {
-	return new(Set).ParseGlob(pattern)
 }
 
 // ParseGlob parses the template definitions in the files identified by the
@@ -219,7 +172,43 @@ func (s *Set) ParseGlob(pattern string) (*Set, error) {
 		return nil, err
 	}
 	if len(filenames) == 0 {
-		return nil, fmt.Errorf("template: pattern matches no files: %#q", pattern)
+		return nil, fmt.Errorf("template: pattern matches no files: %#q",
+			pattern)
 	}
 	return s.ParseFiles(filenames...)
+}
+
+// Convenience parsing wrappers -----------------------------------------------
+
+// Must is a helper that wraps a call to a function returning (*Set, error)
+// and panics if the error is non-nil. It is intended for use in variable
+// initializations such as
+//	var set = template.Must(template.Parse("text"))
+func Must(s *Set, err error) *Set {
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
+// Parse creates a new Set with the template definitions from the given text.
+// If an error occurs, parsing stops and the returned set is nil.
+func Parse(text string) (*Set, error) {
+	return new(Set).Parse(text)
+}
+
+// ParseFiles creates a new Set with the template definitions from the named
+// files. There must be at least one file. If an error occurs, parsing stops
+// and the returned set is nil.
+func ParseFiles(filenames ...string) (*Set, error) {
+	return new(Set).ParseFiles(filenames...)
+}
+
+// ParseGlob creates a new Set with the template definitions from the
+// files identified by the pattern. The pattern is processed by filepath.Glob
+// and must match at least one file. ParseGlob is equivalent to calling
+// ParseFiles with the list of files matched by the pattern. If an error
+// occurs, parsing stops and the returned set is nil.
+func ParseGlob(pattern string) (*Set, error) {
+	return new(Set).ParseGlob(pattern)
 }

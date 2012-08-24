@@ -265,11 +265,11 @@ func testParse(doCopy bool, t *testing.T) {
 				fmt.Printf("%s: %s\n\t%s\n", test.name, input, err)
 			}
 			continue
-		case set.Get("foo") == nil && test.ok:
+		case set["foo"] == nil && test.ok:
 			t.Errorf("%q: template not found", test.name)
 			continue
 		}
-		tmpl := set.Get("foo")
+		tmpl := set["foo"]
 		var result string
 		if doCopy {
 			result = tmpl.Copy().String()

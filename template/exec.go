@@ -113,7 +113,7 @@ func errRecover(errp *error) {
 // object and writes the output to wr.
 func (s *Set) Execute(wr io.Writer, name string, data interface{}) (err error) {
 	s.init()
-	tmpl := s.tmpl.Get(name)
+	tmpl := s.Tree[name]
 	if tmpl == nil {
 		return fmt.Errorf("template: template %q not defined", name)
 	}
@@ -286,7 +286,7 @@ func (s *state) walkRange(dot reflect.Value, r *parse.RangeNode) {
 }
 
 func (s *state) walkTemplate(dot reflect.Value, t *parse.TemplateNode) {
-	tmpl := s.set.tmpl.Get(t.Name)
+	tmpl := s.set.Tree[t.Name]
 	if tmpl == nil {
 		s.errorf("template %q not defined", t.Name)
 	}
@@ -321,7 +321,7 @@ func (s *state) walkBlock(dot reflect.Value, b *parse.BlockNode) {
 // walkFill walks a 'fill' node. It is essentially the same as walkTemplate
 // but it also sets block fillers.
 func (s *state) walkFill(dot reflect.Value, f *parse.FillNode) {
-	tmpl := s.set.tmpl.Get(f.Name)
+	tmpl := s.set.Tree[f.Name]
 	if tmpl == nil {
 		s.errorf("template %q not defined", f.Name)
 	}

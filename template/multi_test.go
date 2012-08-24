@@ -65,12 +65,12 @@ func TestMultiParse(t *testing.T) {
 		if template == nil {
 			continue
 		}
-		if len(template.tmpl.GetAll()) != len(test.names) {
-			t.Errorf("%s: wrong number of templates; wanted %d got %d", test.name, len(test.names), len(template.tmpl.GetAll()))
+		if len(template.Tree) != len(test.names) {
+			t.Errorf("%s: wrong number of templates; wanted %d got %d", test.name, len(test.names), len(template.Tree))
 			continue
 		}
 		for i, name := range test.names {
-			tmpl := template.tmpl.Get(name)
+			tmpl := template.Tree[name]
 			if tmpl == nil {
 				t.Errorf("%s: can't find template %q", test.name, name)
 				continue
@@ -209,7 +209,7 @@ func TestClone(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Verify that the clone is self-consistent.
-	for k, v := range clone.tmpl.GetAll() {
+	for k, v := range clone.Tree {
 		if v == nil {
 			t.Errorf("clone %q contain nil node", k)
 		}
