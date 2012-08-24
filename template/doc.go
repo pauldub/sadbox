@@ -19,8 +19,8 @@ of the differences:
 	  manually calling set.Escape() after all templates were added to a set.
 	- Two new actions were added: {{block}} and {{fill}}, which allows
 	  skeleton templates to be filled by other templates. This must be
-	  familiar to Python developers because it is similar to what Django por
-	  Jinja2 provide through template inheritance.
+	  familiar to Python developers because it is similar to what Django,
+	  Jinja2 or Mako provide through template inheritance.
 
 The rest is basically the same, the grammar is the same, and the syntax is the
 same, as it is built on top of the same zen code from these packages:
