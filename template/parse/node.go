@@ -771,6 +771,11 @@ func (t Tree) String() string {
 
 // Copy returns a deep copy of the tree.
 func (t Tree) Copy() Node {
+	return t.CopyTree()
+}
+
+// CopyTree returns a deep copy of the tree.
+func (t Tree) CopyTree() Tree {
 	nt := Tree{}
 	for k, v := range t {
 		nt[k]= v.CopyDefine()

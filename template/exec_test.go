@@ -205,6 +205,7 @@ func typeOf(arg interface{}) string {
 }
 
 type execTest struct {
+	title  string
 	name   string
 	input  string
 	output string
@@ -222,274 +223,274 @@ var (
 
 var execTests = []execTest{
 	// Trivial cases.
-	{"empty", "", "", nil, true},
-	{"text", "some text", "some text", nil, true},
-	{"nil action", "{{nil}}", "", nil, false},
+	{"empty", "", "", "", nil, true},
+	{"text", "", "some text", "some text", nil, true},
+	{"nil action", "", "{{nil}}", "", nil, false},
 
 	// Ideal constants.
-	{"ideal int", "{{typeOf 3}}", "int", 0, true},
-	{"ideal float", "{{typeOf 1.0}}", "float64", 0, true},
-	{"ideal exp float", "{{typeOf 1e1}}", "float64", 0, true},
-	{"ideal complex", "{{typeOf 1i}}", "complex128", 0, true},
-	{"ideal int", "{{typeOf " + bigInt + "}}", "int", 0, true},
-	{"ideal too big", "{{typeOf " + bigUint + "}}", "", 0, false},
-	{"ideal nil without type", "{{nil}}", "", 0, false},
+	{"ideal int", "", "{{typeOf 3}}", "int", 0, true},
+	{"ideal float", "", "{{typeOf 1.0}}", "float64", 0, true},
+	{"ideal exp float", "", "{{typeOf 1e1}}", "float64", 0, true},
+	{"ideal complex", "", "{{typeOf 1i}}", "complex128", 0, true},
+	{"ideal int", "", "{{typeOf " + bigInt + "}}", "int", 0, true},
+	{"ideal too big", "", "{{typeOf " + bigUint + "}}", "", 0, false},
+	{"ideal nil without type", "", "{{nil}}", "", 0, false},
 
 	// Fields of structs.
-	{".X", "-{{.X}}-", "-x-", tVal, true},
-	{".U.V", "-{{.U.V}}-", "-v-", tVal, true},
-	{".unexported", "{{.unexported}}", "", tVal, false},
+	{".X", "", "-{{.X}}-", "-x-", tVal, true},
+	{".U.V", "", "-{{.U.V}}-", "-v-", tVal, true},
+	{".unexported", "", "{{.unexported}}", "", tVal, false},
 
 	// Fields on maps.
-	{"map .one", "{{.MSI.one}}", "1", tVal, true},
-	{"map .two", "{{.MSI.two}}", "2", tVal, true},
-	{"map .NO", "{{.MSI.NO}}", "<no value>", tVal, true},
-	{"map .one interface", "{{.MXI.one}}", "1", tVal, true},
-	{"map .WRONG args", "{{.MSI.one 1}}", "", tVal, false},
-	{"map .WRONG type", "{{.MII.one}}", "", tVal, false},
+	{"map .one", "", "{{.MSI.one}}", "1", tVal, true},
+	{"map .two", "", "{{.MSI.two}}", "2", tVal, true},
+	{"map .NO", "", "{{.MSI.NO}}", "<no value>", tVal, true},
+	{"map .one interface", "", "{{.MXI.one}}", "1", tVal, true},
+	{"map .WRONG args", "", "{{.MSI.one 1}}", "", tVal, false},
+	{"map .WRONG type", "", "{{.MII.one}}", "", tVal, false},
 
 	// Dots of all kinds to test basic evaluation.
-	{"dot int", "<{{.}}>", "<13>", 13, true},
-	{"dot uint", "<{{.}}>", "<14>", uint(14), true},
-	{"dot float", "<{{.}}>", "<15.1>", 15.1, true},
-	{"dot bool", "<{{.}}>", "<true>", true, true},
-	{"dot complex", "<{{.}}>", "<(16.2-17i)>", 16.2 - 17i, true},
-	{"dot string", "<{{.}}>", "<hello>", "hello", true},
-	{"dot slice", "<{{.}}>", "<[-1 -2 -3]>", []int{-1, -2, -3}, true},
-	{"dot map", "<{{.}}>", "<map[two:22]>", map[string]int{"two": 22}, true},
-	{"dot struct", "<{{.}}>", "<{7 seven}>", struct {
+	{"dot int", "", "<{{.}}>", "<13>", 13, true},
+	{"dot uint", "", "<{{.}}>", "<14>", uint(14), true},
+	{"dot float", "", "<{{.}}>", "<15.1>", 15.1, true},
+	{"dot bool", "", "<{{.}}>", "<true>", true, true},
+	{"dot complex", "", "<{{.}}>", "<(16.2-17i)>", 16.2 - 17i, true},
+	{"dot string", "", "<{{.}}>", "<hello>", "hello", true},
+	{"dot slice", "", "<{{.}}>", "<[-1 -2 -3]>", []int{-1, -2, -3}, true},
+	{"dot map", "", "<{{.}}>", "<map[two:22]>", map[string]int{"two": 22}, true},
+	{"dot struct", "", "<{{.}}>", "<{7 seven}>", struct {
 		a int
 		b string
 	}{7, "seven"}, true},
 
 	// Variables.
-	{"$ int", "{{$}}", "123", 123, true},
-	{"$.I", "{{$.I}}", "17", tVal, true},
-	{"$.U.V", "{{$.U.V}}", "v", tVal, true},
-	{"declare in action", "{{$x := $.U.V}}{{$x}}", "v", tVal, true},
+	{"$ int", "", "{{$}}", "123", 123, true},
+	{"$.I", "", "{{$.I}}", "17", tVal, true},
+	{"$.U.V", "", "{{$.U.V}}", "v", tVal, true},
+	{"declare in action", "", "{{$x := $.U.V}}{{$x}}", "v", tVal, true},
 
 	// Type with String method.
-	{"V{6666}.String()", "-{{.V0}}-", "-<6666>-", tVal, true},
-	{"&V{7777}.String()", "-{{.V1}}-", "-<7777>-", tVal, true},
-	{"(*V)(nil).String()", "-{{.V2}}-", "-nilV-", tVal, true},
+	{"V{6666}.String()", "", "-{{.V0}}-", "-<6666>-", tVal, true},
+	{"&V{7777}.String()", "", "-{{.V1}}-", "-<7777>-", tVal, true},
+	{"(*V)(nil).String()", "", "-{{.V2}}-", "-nilV-", tVal, true},
 
 	// Type with Error method.
-	{"W{888}.Error()", "-{{.W0}}-", "-[888]-", tVal, true},
-	{"&W{999}.Error()", "-{{.W1}}-", "-[999]-", tVal, true},
-	{"(*W)(nil).Error()", "-{{.W2}}-", "-nilW-", tVal, true},
+	{"W{888}.Error()", "", "-{{.W0}}-", "-[888]-", tVal, true},
+	{"&W{999}.Error()", "", "-{{.W1}}-", "-[999]-", tVal, true},
+	{"(*W)(nil).Error()", "", "-{{.W2}}-", "-nilW-", tVal, true},
 
 	// Pointers.
-	{"*int", "{{.PI}}", "23", tVal, true},
-	{"*[]int", "{{.PSI}}", "[21 22 23]", tVal, true},
-	{"*[]int[1]", "{{index .PSI 1}}", "22", tVal, true},
-	{"NIL", "{{.NIL}}", "<nil>", tVal, true},
+	{"*int", "", "{{.PI}}", "23", tVal, true},
+	{"*[]int", "", "{{.PSI}}", "[21 22 23]", tVal, true},
+	{"*[]int[1]", "", "{{index .PSI 1}}", "22", tVal, true},
+	{"NIL", "", "{{.NIL}}", "<nil>", tVal, true},
 
 	// Empty interfaces holding values.
-	{"empty nil", "{{.Empty0}}", "<no value>", tVal, true},
-	{"empty with int", "{{.Empty1}}", "3", tVal, true},
-	{"empty with string", "{{.Empty2}}", "empty2", tVal, true},
-	{"empty with slice", "{{.Empty3}}", "[7 8]", tVal, true},
-	{"empty with struct", "{{.Empty4}}", "{UinEmpty}", tVal, true},
-	{"empty with struct, field", "{{.Empty4.V}}", "UinEmpty", tVal, true},
+	{"empty nil", "", "{{.Empty0}}", "<no value>", tVal, true},
+	{"empty with int", "", "{{.Empty1}}", "3", tVal, true},
+	{"empty with string", "", "{{.Empty2}}", "empty2", tVal, true},
+	{"empty with slice", "", "{{.Empty3}}", "[7 8]", tVal, true},
+	{"empty with struct", "", "{{.Empty4}}", "{UinEmpty}", tVal, true},
+	{"empty with struct, field", "", "{{.Empty4.V}}", "UinEmpty", tVal, true},
 
 	// Method calls.
-	{".Method0", "-{{.Method0}}-", "-M0-", tVal, true},
-	{".Method1(1234)", "-{{.Method1 1234}}-", "-1234-", tVal, true},
-	{".Method1(.I)", "-{{.Method1 .I}}-", "-17-", tVal, true},
-	{".Method2(3, .X)", "-{{.Method2 3 .X}}-", "-Method2: 3 x-", tVal, true},
-	{".Method2(.U16, `str`)", "-{{.Method2 .U16 `str`}}-", "-Method2: 16 str-", tVal, true},
-	{".Method2(.U16, $x)", "{{if $x := .X}}-{{.Method2 .U16 $x}}{{end}}-", "-Method2: 16 x-", tVal, true},
-	{".Method3(nil constant)", "-{{.Method3 nil}}-", "-Method3: <nil>-", tVal, true},
-	{".Method3(nil value)", "-{{.Method3 .MXI.unset}}-", "-Method3: <nil>-", tVal, true},
-	{"method on var", "{{if $x := .}}-{{$x.Method2 .U16 $x.X}}{{end}}-", "-Method2: 16 x-", tVal, true},
-	{"method on chained var",
+	{".Method0", "", "-{{.Method0}}-", "-M0-", tVal, true},
+	{".Method1(1234)", "", "-{{.Method1 1234}}-", "-1234-", tVal, true},
+	{".Method1(.I)", "", "-{{.Method1 .I}}-", "-17-", tVal, true},
+	{".Method2(3, .X)", "", "-{{.Method2 3 .X}}-", "-Method2: 3 x-", tVal, true},
+	{".Method2(.U16, `str`)", "", "-{{.Method2 .U16 `str`}}-", "-Method2: 16 str-", tVal, true},
+	{".Method2(.U16, $x)", "", "{{if $x := .X}}-{{.Method2 .U16 $x}}{{end}}-", "-Method2: 16 x-", tVal, true},
+	{".Method3(nil constant)", "", "-{{.Method3 nil}}-", "-Method3: <nil>-", tVal, true},
+	{".Method3(nil value)", "", "-{{.Method3 .MXI.unset}}-", "-Method3: <nil>-", tVal, true},
+	{"method on var", "", "{{if $x := .}}-{{$x.Method2 .U16 $x.X}}{{end}}-", "-Method2: 16 x-", tVal, true},
+	{"method on chained var", "",
 		"{{range .MSIone}}{{if $.U.TrueFalse $.True}}{{$.U.TrueFalse $.True}}{{else}}WRONG{{end}}{{end}}",
 		"true", tVal, true},
-	{"chained method",
+	{"chained method", "",
 		"{{range .MSIone}}{{if $.GetU.TrueFalse $.True}}{{$.U.TrueFalse $.True}}{{else}}WRONG{{end}}{{end}}",
 		"true", tVal, true},
-	{"chained method on variable",
+	{"chained method on variable", "",
 		"{{with $x := .}}{{with .SI}}{{$.GetU.TrueFalse $.True}}{{end}}{{end}}",
 		"true", tVal, true},
-	{".NilOKFunc not nil", "{{call .NilOKFunc .PI}}", "false", tVal, true},
-	{".NilOKFunc nil", "{{call .NilOKFunc nil}}", "true", tVal, true},
+	{".NilOKFunc not nil", "", "{{call .NilOKFunc .PI}}", "false", tVal, true},
+	{".NilOKFunc nil", "", "{{call .NilOKFunc nil}}", "true", tVal, true},
 
 	// Function call builtin.
-	{".BinaryFunc", "{{call .BinaryFunc `1` `2`}}", "[1=2]", tVal, true},
-	{".VariadicFunc0", "{{call .VariadicFunc}}", "<>", tVal, true},
-	{".VariadicFunc2", "{{call .VariadicFunc `he` `llo`}}", "<he+llo>", tVal, true},
-	{".VariadicFuncInt", "{{call .VariadicFuncInt 33 `he` `llo`}}", "33=<he+llo>", tVal, true},
-	{"if .BinaryFunc call", "{{ if .BinaryFunc}}{{call .BinaryFunc `1` `2`}}{{end}}", "[1=2]", tVal, true},
-	{"if not .BinaryFunc call", "{{ if not .BinaryFunc}}{{call .BinaryFunc `1` `2`}}{{else}}No{{end}}", "No", tVal, true},
-	{"Interface Call", `{{stringer .S}}`, "foozle", map[string]interface{}{"S": bytes.NewBufferString("foozle")}, true},
+	{".BinaryFunc", "", "{{call .BinaryFunc `1` `2`}}", "[1=2]", tVal, true},
+	{".VariadicFunc0", "", "{{call .VariadicFunc}}", "<>", tVal, true},
+	{".VariadicFunc2", "", "{{call .VariadicFunc `he` `llo`}}", "<he+llo>", tVal, true},
+	{".VariadicFuncInt", "", "{{call .VariadicFuncInt 33 `he` `llo`}}", "33=<he+llo>", tVal, true},
+	{"if .BinaryFunc call", "", "{{ if .BinaryFunc}}{{call .BinaryFunc `1` `2`}}{{end}}", "[1=2]", tVal, true},
+	{"if not .BinaryFunc call", "", "{{ if not .BinaryFunc}}{{call .BinaryFunc `1` `2`}}{{else}}No{{end}}", "No", tVal, true},
+	{"Interface Call", "", `{{stringer .S}}`, "foozle", map[string]interface{}{"S": bytes.NewBufferString("foozle")}, true},
 
 	// Erroneous function calls (check args).
-	{".BinaryFuncTooFew", "{{call .BinaryFunc `1`}}", "", tVal, false},
-	{".BinaryFuncTooMany", "{{call .BinaryFunc `1` `2` `3`}}", "", tVal, false},
-	{".BinaryFuncBad0", "{{call .BinaryFunc 1 3}}", "", tVal, false},
-	{".BinaryFuncBad1", "{{call .BinaryFunc `1` 3}}", "", tVal, false},
-	{".VariadicFuncBad0", "{{call .VariadicFunc 3}}", "", tVal, false},
-	{".VariadicFuncIntBad0", "{{call .VariadicFuncInt}}", "", tVal, false},
-	{".VariadicFuncIntBad`", "{{call .VariadicFuncInt `x`}}", "", tVal, false},
-	{".VariadicFuncNilBad", "{{call .VariadicFunc nil}}", "", tVal, false},
+	{".BinaryFuncTooFew", "", "{{call .BinaryFunc `1`}}", "", tVal, false},
+	{".BinaryFuncTooMany", "", "{{call .BinaryFunc `1` `2` `3`}}", "", tVal, false},
+	{".BinaryFuncBad0", "", "{{call .BinaryFunc 1 3}}", "", tVal, false},
+	{".BinaryFuncBad1", "", "{{call .BinaryFunc `1` 3}}", "", tVal, false},
+	{".VariadicFuncBad0", "", "{{call .VariadicFunc 3}}", "", tVal, false},
+	{".VariadicFuncIntBad0", "", "{{call .VariadicFuncInt}}", "", tVal, false},
+	{".VariadicFuncIntBad`", "", "{{call .VariadicFuncInt `x`}}", "", tVal, false},
+	{".VariadicFuncNilBad", "", "{{call .VariadicFunc nil}}", "", tVal, false},
 
 	// Pipelines.
-	{"pipeline", "-{{.Method0 | .Method2 .U16}}-", "-Method2: 16 M0-", tVal, true},
-	{"pipeline func", "-{{call .VariadicFunc `llo` | call .VariadicFunc `he` }}-", "-<he+<llo>>-", tVal, true},
+	{"pipeline", "", "-{{.Method0 | .Method2 .U16}}-", "-Method2: 16 M0-", tVal, true},
+	{"pipeline func", "", "-{{call .VariadicFunc `llo` | call .VariadicFunc `he` }}-", "-<he+<llo>>-", tVal, true},
 
 	// If.
-	{"if true", "{{if true}}TRUE{{end}}", "TRUE", tVal, true},
-	{"if false", "{{if false}}TRUE{{else}}FALSE{{end}}", "FALSE", tVal, true},
-	{"if nil", "{{if nil}}TRUE{{end}}", "", tVal, false},
-	{"if 1", "{{if 1}}NON-ZERO{{else}}ZERO{{end}}", "NON-ZERO", tVal, true},
-	{"if 0", "{{if 0}}NON-ZERO{{else}}ZERO{{end}}", "ZERO", tVal, true},
-	{"if 1.5", "{{if 1.5}}NON-ZERO{{else}}ZERO{{end}}", "NON-ZERO", tVal, true},
-	{"if 0.0", "{{if .FloatZero}}NON-ZERO{{else}}ZERO{{end}}", "ZERO", tVal, true},
-	{"if 1.5i", "{{if 1.5i}}NON-ZERO{{else}}ZERO{{end}}", "NON-ZERO", tVal, true},
-	{"if 0.0i", "{{if .ComplexZero}}NON-ZERO{{else}}ZERO{{end}}", "ZERO", tVal, true},
-	{"if emptystring", "{{if ``}}NON-EMPTY{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
-	{"if string", "{{if `notempty`}}NON-EMPTY{{else}}EMPTY{{end}}", "NON-EMPTY", tVal, true},
-	{"if emptyslice", "{{if .SIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
-	{"if slice", "{{if .SI}}NON-EMPTY{{else}}EMPTY{{end}}", "NON-EMPTY", tVal, true},
-	{"if emptymap", "{{if .MSIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
-	{"if map", "{{if .MSI}}NON-EMPTY{{else}}EMPTY{{end}}", "NON-EMPTY", tVal, true},
-	{"if map unset", "{{if .MXI.none}}NON-ZERO{{else}}ZERO{{end}}", "ZERO", tVal, true},
-	{"if map not unset", "{{if not .MXI.none}}ZERO{{else}}NON-ZERO{{end}}", "ZERO", tVal, true},
-	{"if $x with $y int", "{{if $x := true}}{{with $y := .I}}{{$x}},{{$y}}{{end}}{{end}}", "true,17", tVal, true},
-	{"if $x with $x int", "{{if $x := true}}{{with $x := .I}}{{$x}},{{end}}{{$x}}{{end}}", "17,true", tVal, true},
+	{"if true", "", "{{if true}}TRUE{{end}}", "TRUE", tVal, true},
+	{"if false", "", "{{if false}}TRUE{{else}}FALSE{{end}}", "FALSE", tVal, true},
+	{"if nil", "", "{{if nil}}TRUE{{end}}", "", tVal, false},
+	{"if 1", "", "{{if 1}}NON-ZERO{{else}}ZERO{{end}}", "NON-ZERO", tVal, true},
+	{"if 0", "", "{{if 0}}NON-ZERO{{else}}ZERO{{end}}", "ZERO", tVal, true},
+	{"if 1.5", "", "{{if 1.5}}NON-ZERO{{else}}ZERO{{end}}", "NON-ZERO", tVal, true},
+	{"if 0.0", "", "{{if .FloatZero}}NON-ZERO{{else}}ZERO{{end}}", "ZERO", tVal, true},
+	{"if 1.5i", "", "{{if 1.5i}}NON-ZERO{{else}}ZERO{{end}}", "NON-ZERO", tVal, true},
+	{"if 0.0i", "", "{{if .ComplexZero}}NON-ZERO{{else}}ZERO{{end}}", "ZERO", tVal, true},
+	{"if emptystring", "", "{{if ``}}NON-EMPTY{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
+	{"if string", "", "{{if `notempty`}}NON-EMPTY{{else}}EMPTY{{end}}", "NON-EMPTY", tVal, true},
+	{"if emptyslice", "", "{{if .SIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
+	{"if slice", "", "{{if .SI}}NON-EMPTY{{else}}EMPTY{{end}}", "NON-EMPTY", tVal, true},
+	{"if emptymap", "", "{{if .MSIEmpty}}NON-EMPTY{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
+	{"if map", "", "{{if .MSI}}NON-EMPTY{{else}}EMPTY{{end}}", "NON-EMPTY", tVal, true},
+	{"if map unset", "", "{{if .MXI.none}}NON-ZERO{{else}}ZERO{{end}}", "ZERO", tVal, true},
+	{"if map not unset", "", "{{if not .MXI.none}}ZERO{{else}}NON-ZERO{{end}}", "ZERO", tVal, true},
+	{"if $x with $y int", "", "{{if $x := true}}{{with $y := .I}}{{$x}},{{$y}}{{end}}{{end}}", "true,17", tVal, true},
+	{"if $x with $x int", "", "{{if $x := true}}{{with $x := .I}}{{$x}},{{end}}{{$x}}{{end}}", "17,true", tVal, true},
 
 	// Print etc.
-	{"print", `{{print "hello, print"}}`, "hello, print", tVal, true},
-	{"print 123", `{{print 1 2 3}}`, "1 2 3", tVal, true},
-	{"print nil", `{{print nil}}`, "<nil>", tVal, true},
-	{"println", `{{println 1 2 3}}`, "1 2 3\n", tVal, true},
-	{"printf int", `{{printf "%04x" 127}}`, "007f", tVal, true},
-	{"printf float", `{{printf "%g" 3.5}}`, "3.5", tVal, true},
-	{"printf complex", `{{printf "%g" 1+7i}}`, "(1+7i)", tVal, true},
-	{"printf string", `{{printf "%s" "hello"}}`, "hello", tVal, true},
-	{"printf function", `{{printf "%#q" zeroArgs}}`, "`zeroArgs`", tVal, true},
-	{"printf field", `{{printf "%s" .U.V}}`, "v", tVal, true},
-	{"printf method", `{{printf "%s" .Method0}}`, "M0", tVal, true},
-	{"printf dot", `{{with .I}}{{printf "%d" .}}{{end}}`, "17", tVal, true},
-	{"printf var", `{{with $x := .I}}{{printf "%d" $x}}{{end}}`, "17", tVal, true},
-	{"printf lots", `{{printf "%d %s %g %s" 127 "hello" 7-3i .Method0}}`, "127 hello (7-3i) M0", tVal, true},
+	{"print", "", `{{print "hello, print"}}`, "hello, print", tVal, true},
+	{"print 123", "", `{{print 1 2 3}}`, "1 2 3", tVal, true},
+	{"print nil", "", `{{print nil}}`, "<nil>", tVal, true},
+	{"println", "", `{{println 1 2 3}}`, "1 2 3\n", tVal, true},
+	{"printf int", "", `{{printf "%04x" 127}}`, "007f", tVal, true},
+	{"printf float", "", `{{printf "%g" 3.5}}`, "3.5", tVal, true},
+	{"printf complex", "", `{{printf "%g" 1+7i}}`, "(1+7i)", tVal, true},
+	{"printf string", "", `{{printf "%s" "hello"}}`, "hello", tVal, true},
+	{"printf function", "", `{{printf "%#q" zeroArgs}}`, "`zeroArgs`", tVal, true},
+	{"printf field", "", `{{printf "%s" .U.V}}`, "v", tVal, true},
+	{"printf method", "", `{{printf "%s" .Method0}}`, "M0", tVal, true},
+	{"printf dot", "", `{{with .I}}{{printf "%d" .}}{{end}}`, "17", tVal, true},
+	{"printf var", "", `{{with $x := .I}}{{printf "%d" $x}}{{end}}`, "17", tVal, true},
+	{"printf lots", "", `{{printf "%d %s %g %s" 127 "hello" 7-3i .Method0}}`, "127 hello (7-3i) M0", tVal, true},
 
 	// HTML.
-	{"html", `{{html "<script>alert(\"XSS\");</script>"}}`,
+	{"html", "", `{{html "<script>alert(\"XSS\");</script>"}}`,
 		"&lt;script&gt;alert(&#34;XSS&#34;);&lt;/script&gt;", nil, true},
-	{"html pipeline", `{{printf "<script>alert(\"XSS\");</script>" | html}}`,
+	{"html pipeline", "", `{{printf "<script>alert(\"XSS\");</script>" | html}}`,
 		"&lt;script&gt;alert(&#34;XSS&#34;);&lt;/script&gt;", nil, true},
 
 	// JavaScript.
-	{"js", `{{js .}}`, `It\'d be nice.`, `It'd be nice.`, true},
+	{"js", "", `{{js .}}`, `It\'d be nice.`, `It'd be nice.`, true},
 
 	// URL query.
-	{"urlquery", `{{"http://www.example.org/"|urlquery}}`, "http%3A%2F%2Fwww.example.org%2F", nil, true},
+	{"urlquery", "", `{{"http://www.example.org/"|urlquery}}`, "http%3A%2F%2Fwww.example.org%2F", nil, true},
 
 	// Booleans
-	{"not", "{{not true}} {{not false}}", "false true", nil, true},
-	{"and", "{{and false 0}} {{and 1 0}} {{and 0 true}} {{and 1 1}}", "false 0 0 1", nil, true},
-	{"or", "{{or 0 0}} {{or 1 0}} {{or 0 true}} {{or 1 1}}", "0 1 true 1", nil, true},
-	{"boolean if", "{{if and true 1 `hi`}}TRUE{{else}}FALSE{{end}}", "TRUE", tVal, true},
-	{"boolean if not", "{{if and true 1 `hi` | not}}TRUE{{else}}FALSE{{end}}", "FALSE", nil, true},
+	{"not", "", "{{not true}} {{not false}}", "false true", nil, true},
+	{"and", "", "{{and false 0}} {{and 1 0}} {{and 0 true}} {{and 1 1}}", "false 0 0 1", nil, true},
+	{"or", "", "{{or 0 0}} {{or 1 0}} {{or 0 true}} {{or 1 1}}", "0 1 true 1", nil, true},
+	{"boolean if", "", "{{if and true 1 `hi`}}TRUE{{else}}FALSE{{end}}", "TRUE", tVal, true},
+	{"boolean if not", "", "{{if and true 1 `hi` | not}}TRUE{{else}}FALSE{{end}}", "FALSE", nil, true},
 
 	// Indexing.
-	{"slice[0]", "{{index .SI 0}}", "3", tVal, true},
-	{"slice[1]", "{{index .SI 1}}", "4", tVal, true},
-	{"slice[HUGE]", "{{index .SI 10}}", "", tVal, false},
-	{"slice[WRONG]", "{{index .SI `hello`}}", "", tVal, false},
-	{"map[one]", "{{index .MSI `one`}}", "1", tVal, true},
-	{"map[two]", "{{index .MSI `two`}}", "2", tVal, true},
-	{"map[NO]", "{{index .MSI `XXX`}}", "0", tVal, true},
-	{"map[nil]", "{{index .MSI nil}}", "0", tVal, true},
-	{"map[WRONG]", "{{index .MSI 10}}", "", tVal, false},
-	{"double index", "{{index .SMSI 1 `eleven`}}", "11", tVal, true},
+	{"slice[0]", "", "{{index .SI 0}}", "3", tVal, true},
+	{"slice[1]", "", "{{index .SI 1}}", "4", tVal, true},
+	{"slice[HUGE]", "", "{{index .SI 10}}", "", tVal, false},
+	{"slice[WRONG]", "", "{{index .SI `hello`}}", "", tVal, false},
+	{"map[one]", "", "{{index .MSI `one`}}", "1", tVal, true},
+	{"map[two]", "", "{{index .MSI `two`}}", "2", tVal, true},
+	{"map[NO]", "", "{{index .MSI `XXX`}}", "0", tVal, true},
+	{"map[nil]", "", "{{index .MSI nil}}", "0", tVal, true},
+	{"map[WRONG]", "", "{{index .MSI 10}}", "", tVal, false},
+	{"double index", "", "{{index .SMSI 1 `eleven`}}", "11", tVal, true},
 
 	// Len.
-	{"slice", "{{len .SI}}", "3", tVal, true},
-	{"map", "{{len .MSI }}", "3", tVal, true},
-	{"len of int", "{{len 3}}", "", tVal, false},
-	{"len of nothing", "{{len .Empty0}}", "", tVal, false},
+	{"slice", "", "{{len .SI}}", "3", tVal, true},
+	{"map", "", "{{len .MSI }}", "3", tVal, true},
+	{"len of int", "", "{{len 3}}", "", tVal, false},
+	{"len of nothing", "", "{{len .Empty0}}", "", tVal, false},
 
 	// With.
-	{"with true", "{{with true}}{{.}}{{end}}", "true", tVal, true},
-	{"with false", "{{with false}}{{.}}{{else}}FALSE{{end}}", "FALSE", tVal, true},
-	{"with 1", "{{with 1}}{{.}}{{else}}ZERO{{end}}", "1", tVal, true},
-	{"with 0", "{{with 0}}{{.}}{{else}}ZERO{{end}}", "ZERO", tVal, true},
-	{"with 1.5", "{{with 1.5}}{{.}}{{else}}ZERO{{end}}", "1.5", tVal, true},
-	{"with 0.0", "{{with .FloatZero}}{{.}}{{else}}ZERO{{end}}", "ZERO", tVal, true},
-	{"with 1.5i", "{{with 1.5i}}{{.}}{{else}}ZERO{{end}}", "(0+1.5i)", tVal, true},
-	{"with 0.0i", "{{with .ComplexZero}}{{.}}{{else}}ZERO{{end}}", "ZERO", tVal, true},
-	{"with emptystring", "{{with ``}}{{.}}{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
-	{"with string", "{{with `notempty`}}{{.}}{{else}}EMPTY{{end}}", "notempty", tVal, true},
-	{"with emptyslice", "{{with .SIEmpty}}{{.}}{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
-	{"with slice", "{{with .SI}}{{.}}{{else}}EMPTY{{end}}", "[3 4 5]", tVal, true},
-	{"with emptymap", "{{with .MSIEmpty}}{{.}}{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
-	{"with map", "{{with .MSIone}}{{.}}{{else}}EMPTY{{end}}", "map[one:1]", tVal, true},
-	{"with empty interface, struct field", "{{with .Empty4}}{{.V}}{{end}}", "UinEmpty", tVal, true},
-	{"with $x int", "{{with $x := .I}}{{$x}}{{end}}", "17", tVal, true},
-	{"with $x struct.U.V", "{{with $x := $}}{{$x.U.V}}{{end}}", "v", tVal, true},
-	{"with variable and action", "{{with $x := $}}{{$y := $.U.V}}{{$y}}{{end}}", "v", tVal, true},
+	{"with true", "", "{{with true}}{{.}}{{end}}", "true", tVal, true},
+	{"with false", "", "{{with false}}{{.}}{{else}}FALSE{{end}}", "FALSE", tVal, true},
+	{"with 1", "", "{{with 1}}{{.}}{{else}}ZERO{{end}}", "1", tVal, true},
+	{"with 0", "", "{{with 0}}{{.}}{{else}}ZERO{{end}}", "ZERO", tVal, true},
+	{"with 1.5", "", "{{with 1.5}}{{.}}{{else}}ZERO{{end}}", "1.5", tVal, true},
+	{"with 0.0", "", "{{with .FloatZero}}{{.}}{{else}}ZERO{{end}}", "ZERO", tVal, true},
+	{"with 1.5i", "", "{{with 1.5i}}{{.}}{{else}}ZERO{{end}}", "(0+1.5i)", tVal, true},
+	{"with 0.0i", "", "{{with .ComplexZero}}{{.}}{{else}}ZERO{{end}}", "ZERO", tVal, true},
+	{"with emptystring", "", "{{with ``}}{{.}}{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
+	{"with string", "", "{{with `notempty`}}{{.}}{{else}}EMPTY{{end}}", "notempty", tVal, true},
+	{"with emptyslice", "", "{{with .SIEmpty}}{{.}}{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
+	{"with slice", "", "{{with .SI}}{{.}}{{else}}EMPTY{{end}}", "[3 4 5]", tVal, true},
+	{"with emptymap", "", "{{with .MSIEmpty}}{{.}}{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
+	{"with map", "", "{{with .MSIone}}{{.}}{{else}}EMPTY{{end}}", "map[one:1]", tVal, true},
+	{"with empty interface, struct field", "", "{{with .Empty4}}{{.V}}{{end}}", "UinEmpty", tVal, true},
+	{"with $x int", "", "{{with $x := .I}}{{$x}}{{end}}", "17", tVal, true},
+	{"with $x struct.U.V", "", "{{with $x := $}}{{$x.U.V}}{{end}}", "v", tVal, true},
+	{"with variable and action", "", "{{with $x := $}}{{$y := $.U.V}}{{$y}}{{end}}", "v", tVal, true},
 
 	// Range.
-	{"range []int", "{{range .SI}}-{{.}}-{{end}}", "-3--4--5-", tVal, true},
-	{"range empty no else", "{{range .SIEmpty}}-{{.}}-{{end}}", "", tVal, true},
-	{"range []int else", "{{range .SI}}-{{.}}-{{else}}EMPTY{{end}}", "-3--4--5-", tVal, true},
-	{"range empty else", "{{range .SIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
-	{"range []bool", "{{range .SB}}-{{.}}-{{end}}", "-true--false-", tVal, true},
-	{"range []int method", "{{range .SI | .MAdd .I}}-{{.}}-{{end}}", "-20--21--22-", tVal, true},
-	{"range map", "{{range .MSI}}-{{.}}-{{end}}", "-1--3--2-", tVal, true},
-	{"range empty map no else", "{{range .MSIEmpty}}-{{.}}-{{end}}", "", tVal, true},
-	{"range map else", "{{range .MSI}}-{{.}}-{{else}}EMPTY{{end}}", "-1--3--2-", tVal, true},
-	{"range empty map else", "{{range .MSIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
-	{"range empty interface", "{{range .Empty3}}-{{.}}-{{else}}EMPTY{{end}}", "-7--8-", tVal, true},
-	{"range empty nil", "{{range .Empty0}}-{{.}}-{{end}}", "", tVal, true},
-	{"range $x SI", "{{range $x := .SI}}<{{$x}}>{{end}}", "<3><4><5>", tVal, true},
-	{"range $x $y SI", "{{range $x, $y := .SI}}<{{$x}}={{$y}}>{{end}}", "<0=3><1=4><2=5>", tVal, true},
-	{"range $x MSIone", "{{range $x := .MSIone}}<{{$x}}>{{end}}", "<1>", tVal, true},
-	{"range $x $y MSIone", "{{range $x, $y := .MSIone}}<{{$x}}={{$y}}>{{end}}", "<one=1>", tVal, true},
-	{"range $x PSI", "{{range $x := .PSI}}<{{$x}}>{{end}}", "<21><22><23>", tVal, true},
-	{"declare in range", "{{range $x := .PSI}}<{{$foo:=$x}}{{$x}}>{{end}}", "<21><22><23>", tVal, true},
-	{"range count", `{{range $i, $x := count 5}}[{{$i}}]{{$x}}{{end}}`, "[0]a[1]b[2]c[3]d[4]e", tVal, true},
-	{"range nil count", `{{range $i, $x := count 0}}{{else}}empty{{end}}`, "empty", tVal, true},
+	{"range []int", "", "{{range .SI}}-{{.}}-{{end}}", "-3--4--5-", tVal, true},
+	{"range empty no else", "", "{{range .SIEmpty}}-{{.}}-{{end}}", "", tVal, true},
+	{"range []int else", "", "{{range .SI}}-{{.}}-{{else}}EMPTY{{end}}", "-3--4--5-", tVal, true},
+	{"range empty else", "", "{{range .SIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
+	{"range []bool", "", "{{range .SB}}-{{.}}-{{end}}", "-true--false-", tVal, true},
+	{"range []int method", "", "{{range .SI | .MAdd .I}}-{{.}}-{{end}}", "-20--21--22-", tVal, true},
+	{"range map", "", "{{range .MSI}}-{{.}}-{{end}}", "-1--3--2-", tVal, true},
+	{"range empty map no else", "", "{{range .MSIEmpty}}-{{.}}-{{end}}", "", tVal, true},
+	{"range map else", "", "{{range .MSI}}-{{.}}-{{else}}EMPTY{{end}}", "-1--3--2-", tVal, true},
+	{"range empty map else", "", "{{range .MSIEmpty}}-{{.}}-{{else}}EMPTY{{end}}", "EMPTY", tVal, true},
+	{"range empty interface", "", "{{range .Empty3}}-{{.}}-{{else}}EMPTY{{end}}", "-7--8-", tVal, true},
+	{"range empty nil", "", "{{range .Empty0}}-{{.}}-{{end}}", "", tVal, true},
+	{"range $x SI", "", "{{range $x := .SI}}<{{$x}}>{{end}}", "<3><4><5>", tVal, true},
+	{"range $x $y SI", "", "{{range $x, $y := .SI}}<{{$x}}={{$y}}>{{end}}", "<0=3><1=4><2=5>", tVal, true},
+	{"range $x MSIone", "", "{{range $x := .MSIone}}<{{$x}}>{{end}}", "<1>", tVal, true},
+	{"range $x $y MSIone", "", "{{range $x, $y := .MSIone}}<{{$x}}={{$y}}>{{end}}", "<one=1>", tVal, true},
+	{"range $x PSI", "", "{{range $x := .PSI}}<{{$x}}>{{end}}", "<21><22><23>", tVal, true},
+	{"declare in range", "", "{{range $x := .PSI}}<{{$foo:=$x}}{{$x}}>{{end}}", "<21><22><23>", tVal, true},
+	{"range count", "", `{{range $i, $x := count 5}}[{{$i}}]{{$x}}{{end}}`, "[0]a[1]b[2]c[3]d[4]e", tVal, true},
+	{"range nil count", "", `{{range $i, $x := count 0}}{{else}}empty{{end}}`, "empty", tVal, true},
 
 	// Cute examples.
-	{"or as if true", `{{or .SI "slice is empty"}}`, "[3 4 5]", tVal, true},
-	{"or as if false", `{{or .SIEmpty "slice is empty"}}`, "slice is empty", tVal, true},
+	{"or as if true", "", `{{or .SI "slice is empty"}}`, "[3 4 5]", tVal, true},
+	{"or as if false", "", `{{or .SIEmpty "slice is empty"}}`, "slice is empty", tVal, true},
 
 	// Error handling.
-	{"error method, error", "{{.MyError true}}", "", tVal, false},
-	{"error method, no error", "{{.MyError false}}", "false", tVal, true},
+	{"error method, error", "", "{{.MyError true}}", "", tVal, false},
+	{"error method, no error", "", "{{.MyError false}}", "false", tVal, true},
 
 	// Fixed bugs.
 	// Must separate dot and receiver; otherwise args are evaluated with dot set to variable.
-	{"bug0", "{{range .MSIone}}{{if $.Method1 .}}X{{end}}{{end}}", "X", tVal, true},
+	{"bug0", "", "{{range .MSIone}}{{if $.Method1 .}}X{{end}}{{end}}", "X", tVal, true},
 	// Do not loop endlessly in indirect for non-empty interfaces.
 	// The bug appears with *interface only; looped forever.
-	{"bug1", "{{.Method0}}", "M0", &iVal, true},
+	{"bug1", "", "{{.Method0}}", "M0", &iVal, true},
 	// Was taking address of interface field, so method set was empty.
-	{"bug2", "{{$.NonEmptyInterface.Method0}}", "M0", tVal, true},
+	{"bug2", "", "{{$.NonEmptyInterface.Method0}}", "M0", tVal, true},
 	// Struct values were not legal in with - mere oversight.
-	{"bug3", "{{with $}}{{.Method0}}{{end}}", "M0", tVal, true},
+	{"bug3", "", "{{with $}}{{.Method0}}{{end}}", "M0", tVal, true},
 	// Nil interface values in if.
-	{"bug4", "{{if .Empty0}}non-nil{{else}}nil{{end}}", "nil", tVal, true},
+	{"bug4", "", "{{if .Empty0}}non-nil{{else}}nil{{end}}", "nil", tVal, true},
 	// Stringer.
-	{"bug5", "{{.Str}}", "foozle", tVal, true},
-	{"bug5a", "{{.Err}}", "erroozle", tVal, true},
+	{"bug5", "", "{{.Str}}", "foozle", tVal, true},
+	{"bug5a", "", "{{.Err}}", "erroozle", tVal, true},
 	// Args need to be indirected and dereferenced sometimes.
-	{"bug6a", "{{vfunc .V0 .V1}}", "vfunc", tVal, true},
-	{"bug6b", "{{vfunc .V0 .V0}}", "vfunc", tVal, true},
-	{"bug6c", "{{vfunc .V1 .V0}}", "vfunc", tVal, true},
-	{"bug6d", "{{vfunc .V1 .V1}}", "vfunc", tVal, true},
+	{"bug6a", "", "{{vfunc .V0 .V1}}", "vfunc", tVal, true},
+	{"bug6b", "", "{{vfunc .V0 .V0}}", "vfunc", tVal, true},
+	{"bug6c", "", "{{vfunc .V1 .V0}}", "vfunc", tVal, true},
+	{"bug6d", "", "{{vfunc .V1 .V1}}", "vfunc", tVal, true},
 	// Legal parse but illegal execution: non-function should have no arguments.
-	{"bug7a", "{{3 2}}", "", tVal, false},
-	{"bug7b", "{{$x := 1}}{{$x 2}}", "", tVal, false},
-	{"bug7c", "{{$x := 1}}{{3 | $x}}", "", tVal, false},
+	{"bug7a", "", "{{3 2}}", "", tVal, false},
+	{"bug7b", "", "{{$x := 1}}{{$x 2}}", "", tVal, false},
+	{"bug7c", "", "{{$x := 1}}{{3 | $x}}", "", tVal, false},
 	// Pipelined arg was not being type-checked.
-	{"bug8a", "{{3|oneArg}}", "", tVal, false},
-	{"bug8b", "{{4|dddArg 3}}", "", tVal, false},
+	{"bug8a", "", "{{3|oneArg}}", "", tVal, false},
+	{"bug8b", "", "{{4|dddArg 3}}", "", tVal, false},
 	// A bug was introduced that broke map lookups for lower-case names.
-	{"bug9", "{{.cause}}", "neglect", map[string]string{"cause": "neglect"}, true},
+	{"bug9", "", "{{.cause}}", "neglect", map[string]string{"cause": "neglect"}, true},
 }
 
 func zeroArgs() string {
@@ -544,35 +545,39 @@ func testExecute(execTests []execTest, template *Set, t *testing.T, wrap bool) {
 		var err error
 		input := test.input
 		if wrap {
-			input = fmt.Sprintf(`{{define "foo"}}%s{{end}}`, test.input)
+			input = fmt.Sprintf(`{{define "t"}}%s{{end}}`, test.input)
 		}
 		if template == nil {
-			tmpl, err = new(Set).Funcs(funcs).parseNamed(input, test.name)
+			tmpl, err = new(Set).Funcs(funcs).parseNamed(input, test.title)
 		} else {
-			tmpl, err = template.Funcs(funcs).parseNamed(input, test.name)
+			tmpl, err = template.Funcs(funcs).parseNamed(input, test.title)
 		}
 		if err != nil {
-			t.Errorf("%s: parse error: %s", test.name, err)
+			t.Errorf("%s: parse error: %s", test.title, err)
 			continue
 		}
 		b.Reset()
-		err = tmpl.Execute(b, "foo", test.data)
+		name := test.name
+		if name == "" {
+			name = "t"
+		}
+		err = tmpl.Execute(b, name, test.data)
 		switch {
 		case !test.ok && err == nil:
-			t.Errorf("%s: expected error; got none", test.name)
+			t.Errorf("%s: expected error; got none", test.title)
 			continue
 		case test.ok && err != nil:
-			t.Errorf("%s: unexpected execute error: %s", test.name, err)
+			t.Errorf("%s: unexpected execute error: %s", test.title, err)
 			continue
 		case !test.ok && err != nil:
 			// expected error, got one
 			if *debug {
-				fmt.Printf("%s: %s\n\t%s\n", test.name, input, err)
+				fmt.Printf("%s: %s\n\t%s\n", test.title, input, err)
 			}
 		}
 		result := b.String()
 		if result != test.output {
-			t.Errorf("%s: expected\n\t%q\ngot\n\t%q", test.name, test.output, result)
+			t.Errorf("%s: expected\n\t%q\ngot\n\t%q", test.title, test.output, result)
 		}
 	}
 }
@@ -604,7 +609,7 @@ func TestDelims(t *testing.T) {
 			trueRight = "}}"
 		}
 		// Set the define action
-		text := fmt.Sprintf(`%sdefine "foo"%s`, trueLeft, trueRight)
+		text := fmt.Sprintf(`%sdefine "t"%s`, trueLeft, trueRight)
 		// Now add the text
 		text += trueLeft + ".Str" + trueRight
 		// Now add a comment
@@ -613,13 +618,13 @@ func TestDelims(t *testing.T) {
 		text += trueLeft + `"` + trueLeft + `"` + trueRight
 		// Now add end action
 		text += trueLeft + "end" + trueRight
-		// At this point text looks like `{{define "foo"}}{{.Str}}{{/*comment*/}}{{"{{"}}{{end}}`.
+		// At this point text looks like `{{define "t"}}{{.Str}}{{/*comment*/}}{{"{{"}}{{end}}`.
 		set, err := new(Set).Delims(left, right).Parse(text)
 		if err != nil {
 			t.Fatalf("delim %q text %q parse err %s", left, text, err)
 		}
 		var b = new(bytes.Buffer)
-		err = set.Execute(b, "foo", value)
+		err = set.Execute(b, "t", value)
 		if err != nil {
 			t.Fatalf("delim %q exec err %s", left, err)
 		}
@@ -632,11 +637,11 @@ func TestDelims(t *testing.T) {
 // Check that an error from a method flows back to the top.
 func TestExecuteError(t *testing.T) {
 	b := new(bytes.Buffer)
-	tmpl, err := new(Set).Parse(`{{define "foo"}}{{.MyError true}}{{end}}`)
+	tmpl, err := new(Set).Parse(`{{define "t"}}{{.MyError true}}{{end}}`)
 	if err != nil {
 		t.Fatalf("parse error: %s", err)
 	}
-	err = tmpl.Execute(b, "foo", tVal)
+	err = tmpl.Execute(b, "t", tVal)
 	if err == nil {
 		t.Errorf("expected error; got none")
 	} else if !strings.Contains(err.Error(), myError.Error()) {

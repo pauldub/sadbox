@@ -697,8 +697,6 @@ func TestEscape(t *testing.T) {
 	}
 }
 
-
-
 func TestEscapeSet(t *testing.T) {
 	type dataItem struct {
 		Children []*dataItem
@@ -740,15 +738,16 @@ func TestEscapeSet(t *testing.T) {
 		},
 		// A template called in a context other than the start.
 		{
-			// TODO: the original test fails; investigate why.
+			// TODO:
+			// In html/template tests the <b> tag is not closed ("<b")
+			// but this results in "... ends in a non-text context" for us.
+			// Closing the tag gives the expected output.
 			map[string]string{
 				"main": `<a onclick='a = {{template "helper"}};'>`,
 				// Not a valid top level HTML template.
 				// "<b" is not a full tag.
-				//"helper": `{{"<a>"}}<b`,
 				"helper": `{{"<a>"}}<b>`,
 			},
-			//`<a onclick='a = &#34;\u003ca\u003e&#34;<b;'>`,
 			`<a onclick='a = &#34;\u003ca\u003e&#34;<b>;'>`,
 		},
 		// A recursive template that ends in its start context.
@@ -955,12 +954,14 @@ func TestErrors(t *testing.T) {
 			": no such template \"foo\"",
 		},
 		{
-			// TODO check original
+			// TODO:
+			// In html/template tests the <b> tag is not closed ("<b")
+			// but this results in "... ends in a non-text context" for us.
+			// Closing the tag gives the expected "... in attribute name"
+			// error.
 			`<div{{template "y"}}>{{end}}` +
 				// Illegal starting in stateTag but not in stateText.
-				//`{{define "y"}} foo<b`,
 				`{{define "y"}} foo<b>`,
-			//`: "<" in attribute name: " foo<b"`,
 			`: "<" in attribute name: " foo<b>"`,
 		},
 		{

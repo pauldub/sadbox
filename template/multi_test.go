@@ -85,19 +85,19 @@ func TestMultiParse(t *testing.T) {
 }
 
 var multiExecTests = []execTest{
-	{"empty", "", "", nil, true},
-	{"text", `{{define "foo"}}some text{{end}}`, "some text", nil, true},
-	{"invoke x", `{{define "foo"}}{{template "x" .SI}}{{end}}`, "TEXT", tVal, true},
-	{"invoke x no args", `{{define "foo"}}{{template "x"}}{{end}}`, "TEXT", tVal, true},
-	{"invoke dot int", `{{define "foo"}}{{template "dot" .I}}{{end}}`, "17", tVal, true},
-	{"invoke dot []int", `{{define "foo"}}{{template "dot" .SI}}{{end}}`, "[3 4 5]", tVal, true},
-	{"invoke dotV", `{{define "foo"}}{{template "dotV" .U}}{{end}}`, "v", tVal, true},
-	{"invoke nested int", `{{define "foo"}}{{template "nested" .I}}{{end}}`, "17", tVal, true},
-	{"variable declared by template", `{{define "foo"}}{{template "nested" $x:=.SI}},{{index $x 1}}{{end}}`, "[3 4 5],4", tVal, true},
+	{"empty", "", `{{define "t"}}{{end}}`, "", nil, true},
+	{"text", "a", `{{define "a"}}some text{{end}}`, "some text", nil, true},
+	{"invoke x", "b", `{{define "b"}}{{template "x" .SI}}{{end}}`, "TEXT", tVal, true},
+	{"invoke x no args", "c", `{{define "c"}}{{template "x"}}{{end}}`, "TEXT", tVal, true},
+	{"invoke dot int", "d", `{{define "d"}}{{template "dot" .I}}{{end}}`, "17", tVal, true},
+	{"invoke dot []int", "e", `{{define "e"}}{{template "dot" .SI}}{{end}}`, "[3 4 5]", tVal, true},
+	{"invoke dotV", "f", `{{define "f"}}{{template "dotV" .U}}{{end}}`, "v", tVal, true},
+	{"invoke nested int", "g", `{{define "g"}}{{template "nested" .I}}{{end}}`, "17", tVal, true},
+	{"variable declared by template", "h", `{{define "h"}}{{template "nested" $x:=.SI}},{{index $x 1}}{{end}}`, "[3 4 5],4", tVal, true},
 
 	// User-defined function: test argument evaluator.
-	{"testFunc literal", `{{define "foo"}}{{oneArg "joe"}}{{end}}`, "oneArg=joe", tVal, true},
-	{"testFunc .", `{{define "foo"}}{{oneArg .}}{{end}}`, "oneArg=joe", "joe", true},
+	{"testFunc literal", "i", `{{define "i"}}{{oneArg "joe"}}{{end}}`, "oneArg=joe", tVal, true},
+	{"testFunc .", "j", `{{define "j"}}{{oneArg .}}{{end}}`, "oneArg=joe", "joe", true},
 }
 
 // These strings are also in testdata/*.
@@ -113,56 +113,50 @@ const multiText2 = `
 
 // TODO: must redesign these tests to use required {{define}}
 func TestMultiExecute(t *testing.T) {
-	/*
 	// Declare a couple of templates first.
-	template, err := Parse(multiText1)
+	set, err := Parse(multiText1)
 	if err != nil {
 		t.Fatalf("parse error for 1: %s", err)
 	}
-	template, err = template.Parse(multiText2)
+	set, err = set.Parse(multiText2)
 	if err != nil {
 		t.Fatalf("parse error for 2: %s", err)
 	}
-	testExecute(multiExecTests, template, t, false)
-	*/
+	testExecute(multiExecTests, set, t, false)
 }
 
 func TestParseFiles(t *testing.T) {
-	/*
 	_, err := ParseFiles("DOES NOT EXIST")
 	if err == nil {
 		t.Error("expected error for non-existent file; got none")
 	}
-	template, err := new(Set).ParseFiles("testdata/file1.tmpl", "testdata/file2.tmpl")
+	set, err := new(Set).ParseFiles("testdata/file1.tmpl", "testdata/file2.tmpl")
 	if err != nil {
 		t.Fatalf("error parsing files: %v", err)
 	}
-	testExecute(multiExecTests, template, t, false)
-	*/
+	testExecute(multiExecTests, set, t, false)
 }
 
 func TestParseGlob(t *testing.T) {
-	/*
 	_, err := ParseGlob("DOES NOT EXIST")
 	if err == nil {
 		t.Error("expected error for non-existent file; got none")
 	}
-	template, err := new(Set).ParseGlob("[x")
+	set, err := new(Set).ParseGlob("[x")
 	if err == nil {
 		t.Error("expected error for bad pattern; got none")
 	}
-	template, err = new(Set).ParseGlob("testdata/file*.tmpl")
+	set, err = new(Set).ParseGlob("testdata/file*.tmpl")
 	if err != nil {
 		t.Fatalf("error parsing files: %v", err)
 	}
-	testExecute(multiExecTests, template, t, false)
-	*/
+	testExecute(multiExecTests, set, t, false)
 }
 
 // In these tests, actual content (not just template definitions) comes from the parsed files.
 
 var templateFileExecTests = []execTest{
-	{"test", `{{define "foo"}}{{template "tmpl1"}}{{template "tmpl2"}}{{end}}`, "template1-y-template2-x-", 0, true},
+	{"test", "", `{{define "t"}}{{template "tmpl1"}}{{template "tmpl2"}}{{end}}`, "template1-y-template2-x-", 0, true},
 }
 
 func TestParseFilesWithData(t *testing.T) {

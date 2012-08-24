@@ -61,7 +61,6 @@ var benchTemplate = `
 {{end}}
 `
 
-// to bench execution one day
 var benchData = map[string]interface{}{
 	"PageTitle": "Benchmark",
 	"Menu": []map[string]string{
