@@ -18,7 +18,7 @@ import (
 //
 // To create a new set call Parse (or other Parse* functions):
 //
-//     set, err := Parse(`{{define "hello"}}Hello, World.{{end}}`)
+//     set, err := template.Parse(`{{define "hello"}}Hello, World.{{end}}`)
 //     if err != nil {
 //         // do something with the parsing error...
 //     }
@@ -120,14 +120,14 @@ func (s *Set) Escape() (*Set, error) {
 
 // Parsing --------------------------------------------------------------------
 
-// parseNamed parses the given text and adds the resulting templates to the
-// set. The name is only used for debugging purposes: useful to parse multiple
+// parse parses the given text and adds the resulting templates to the set.
+// The name is only used for debugging purposes: useful to parse multiple
 // files or glob, for example, to know which file caused an error.
 // Adding templates after the set executed results in error.
-func (s *Set) parseNamed(text, name string) (*Set, error) {
+func (s *Set) parse(text, name string) (*Set, error) {
 	s.init()
-	if tree, err := parse.Parse(name, text, s.leftDelim, s.rightDelim, builtins,
-		s.parseFuncs); err != nil {
+	if tree, err := parse.Parse(text, name, s.leftDelim, s.rightDelim,
+		builtins, s.parseFuncs); err != nil {
 		return nil, err
 	} else if err = s.Tree.AddTree(tree); err != nil {
 		return nil, err
@@ -139,7 +139,7 @@ func (s *Set) parseNamed(text, name string) (*Set, error) {
 // If an error occurs, parsing stops and the returned set is nil; otherwise
 // it is s.
 func (s *Set) Parse(text string) (*Set, error) {
-	return s.parseNamed(text, "source")
+	return s.parse(text, "source")
 }
 
 // ParseFiles parses the named files and adds the resulting templates to the
@@ -153,7 +153,7 @@ func (s *Set) ParseFiles(filenames ...string) (*Set, error) {
 	for _, filename := range filenames {
 		if b, err := ioutil.ReadFile(filename); err != nil {
 			return nil, err
-		} else if _, err = s.parseNamed(string(b), filename); err != nil {
+		} else if _, err = s.parse(string(b), filename); err != nil {
 			return nil, err
 		}
 	}

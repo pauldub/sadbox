@@ -548,9 +548,9 @@ func testExecute(execTests []execTest, template *Set, t *testing.T, wrap bool) {
 			input = fmt.Sprintf(`{{define "t"}}%s{{end}}`, test.input)
 		}
 		if template == nil {
-			tmpl, err = new(Set).Funcs(funcs).parseNamed(input, test.title)
+			tmpl, err = new(Set).Funcs(funcs).parse(input, test.title)
 		} else {
-			tmpl, err = template.Funcs(funcs).parseNamed(input, test.title)
+			tmpl, err = template.Funcs(funcs).parse(input, test.title)
 		}
 		if err != nil {
 			t.Errorf("%s: parse error: %s", test.title, err)

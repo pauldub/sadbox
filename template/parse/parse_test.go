@@ -251,7 +251,7 @@ func testParse(doCopy bool, t *testing.T) {
 	for _, test := range parseTests {
 		input := fmt.Sprintf(`{{define "foo"}}%s{{end}}`, test.input)
 		expect := fmt.Sprintf(`{{define "foo"}}%s{{end}}`, test.result)
-		set, err := Parse("", input, "", "", builtins)
+		set, err := Parse(input, "", "", "", builtins)
 		switch {
 		case err == nil && !test.ok:
 			t.Errorf("%q: expected error; got none", test.name)

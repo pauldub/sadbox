@@ -16,7 +16,7 @@ import (
 )
 
 // Parse parses a string and returns a SetNode with the parsed templates.
-func Parse(name, text, leftDelim, rightDelim string, funcs ...map[string]interface{}) (Tree, error) {
+func Parse(text, name, leftDelim, rightDelim string, funcs ...map[string]interface{}) (Tree, error) {
 	p := &parser{
 		name:  name,
 		tree:  Tree{},

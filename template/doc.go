@@ -64,7 +64,7 @@ calling Set.Escape after all templates were added to a set:
 
 	set, err := template.Parse(`{{define "hello"}}Hello, World.{{end}}`)
 	// ...
-	set, err := set.Escape()
+	set, err = set.Escape()
 
 Without calling Escape the template works like in the text/template package.
 After calling Escape it behaves like in the html/template package, escaping

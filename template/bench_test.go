@@ -78,7 +78,7 @@ var benchData = map[string]interface{}{
 
 func BenchmarkParser(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		tree, err := parse.Parse("page", benchTemplate, "{{", "}}")
+		tree, err := parse.Parse(benchTemplate, "page", "{{", "}}")
 		if err != nil {
 			panic(err)
 		}
