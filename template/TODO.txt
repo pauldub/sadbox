@@ -3,4 +3,8 @@ TODO
 - Simplify NumberNode: split it into FloatNode and IntNode. Support
   only decimal int and decimal/hexadecimal float, like Closure.
   Drop support for complex and uint.
+- All errors must inform filename when available, that is, for all
+  templates parsed using ParseFiles() or ParseGlob().
+- All parsing/execution errors must also inform accurate line and
+  column numbers where the error occurred.
 
