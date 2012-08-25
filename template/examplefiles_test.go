@@ -126,7 +126,7 @@ func ExampleTemplate_share() {
 	// exist in some location known to the program.
 	dir := createTestDir([]templateFile{
 		// T0.tmpl is a plain template file that just invokes T1.
-		{"T0.tmpl", `{{define "T0"}}T0 ({{.}} version) invokes T1: ({{template "T1"}})`+ "\n{{end}}"},
+		{"T0.tmpl", `{{define "T0"}}T0 ({{.}} version) invokes T1: ({{template "T1"}})` + "\n{{end}}"},
 		// T1.tmpl defines a template, T1 that invokes T2. Note T2 is not defined
 		{"T1.tmpl", `{{define "T1"}}T1 invokes T2: ({{template "T2"}}){{end}}`},
 	})

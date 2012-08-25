@@ -778,7 +778,7 @@ func (t Tree) Copy() Node {
 func (t Tree) CopyTree() Tree {
 	nt := Tree{}
 	for k, v := range t {
-		nt[k]= v.CopyDefine()
+		nt[k] = v.CopyDefine()
 	}
 	return nt
 }
@@ -787,7 +787,7 @@ func (t Tree) CopyTree() Tree {
 func (t Tree) CopyShallow() Tree {
 	nt := Tree{}
 	for k, v := range t {
-		nt[k]= v
+		nt[k] = v
 	}
 	return nt
 }

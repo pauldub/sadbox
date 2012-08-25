@@ -77,8 +77,8 @@ func TestMultiParse(t *testing.T) {
 			}
 			result := tmpl.String()
 			if result != test.results[i] {
-			// TODO: string will show a single template, and not a root with defines
-			//	t.Errorf("%s=(%v): got\n\t%v\nexpected\n\t%v", test.name, test.input, result, test.results[i])
+				// TODO: string will show a single template, and not a root with defines
+				//	t.Errorf("%s=(%v): got\n\t%v\nexpected\n\t%v", test.name, test.input, result, test.results[i])
 			}
 		}
 	}

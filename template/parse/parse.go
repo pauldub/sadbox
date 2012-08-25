@@ -27,11 +27,11 @@ func Parse(text, name, leftDelim, rightDelim string, funcs ...map[string]interfa
 }
 
 type parser struct {
-	name      string   // used for debugging only.
+	name      string // used for debugging only.
 	tree      Tree
 	funcs     []map[string]interface{}
 	lex       *lexer
-	token     [2]item  // two-token lookahead for parser.
+	token     [2]item // two-token lookahead for parser.
 	peekCount int
 	vars      []string // variables defined at the moment.
 }

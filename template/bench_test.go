@@ -6,10 +6,10 @@ package template
 
 import (
 	"bytes"
-	"testing"
 	htmlTemplate "html/template"
+	"testing"
 	textTemplate "text/template"
-	textParse    "text/template/parse"
+	textParse "text/template/parse"
 
 	"code.google.com/p/sadbox/template/parse"
 )
