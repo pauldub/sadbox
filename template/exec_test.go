@@ -12,6 +12,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"code.google.com/p/sadbox/template/escape"
 )
 
 var debug = flag.Bool("debug", false, "show the errors produced by the tests")
@@ -664,7 +666,7 @@ func TestJSEscaping(t *testing.T) {
 		{`<html>`, `\x3Chtml\x3E`},
 	}
 	for _, tc := range testCases {
-		s := JSEscapeString(tc.in)
+		s := escape.JSEscapeString(tc.in)
 		if s != tc.exp {
 			t.Errorf("JS escaping [%s] got [%s] want [%s]", tc.in, s, tc.exp)
 		}
