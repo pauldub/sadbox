@@ -1,0 +1,6 @@
+TODO
+====
+- Simplify NumberNode: split it into FloatNode and IntNode. Support
+  only decimal int and decimal/hexadecimal float, like Closure.
+  Drop support for complex and uint.
+
